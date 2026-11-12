@@ -8,3 +8,7 @@ supabase/.temp
 supabase/.branches
 .env.*
 !.env.example
+.vercel
+
+.vercel
+.env*
