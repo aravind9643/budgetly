@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "Budgetly",
+    "slug": "budgetly",
+    "scheme": "budgetly",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "ios": { "supportsTablet": true, "bundleIdentifier": "com.example.budgetly" },
+    "android": { "package": "com.example.budgetly" },
+    "web": { "bundler": "metro", "output": "single", "name": "Budgetly", "shortName": "Budgetly" },
+    "plugins": ["expo-router"],
+    "experiments": { "typedRoutes": false }
+  }
+}

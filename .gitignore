@@ -1,0 +1,10 @@
+node_modules
+.expo
+dist
+.env
+ios
+android
+supabase/.temp
+supabase/.branches
+.env.*
+!.env.example
