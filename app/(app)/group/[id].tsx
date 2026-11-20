@@ -1,396 +1,207 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Modal, Platform, Pressable, ScrollView, Share, Text, View } from 'react-native';
-import Animated, {
-  FadeIn, FadeInDown, FadeOut, LinearTransition, SlideInDown, SlideOutDown, ZoomIn,
-} from 'react-native-reanimated';
-import { Bouncy, Button, Card, Chip, Input, ProgressBar, Screen, Sub, s } from '@/components/ui';
+import { useMemo, useState } from 'react';
+import { ScrollView, Text, View } from 'react-native';
+import Animated, { FadeIn, FadeInDown, ZoomIn } from 'react-native-reanimated';
+import { Activity } from '@/components/group/Activity';
+import { Members } from '@/components/group/Members';
+import { MonthStats, Overview } from '@/components/group/Overview';
+import { TransactionSheet } from '@/components/group/TransactionSheet';
+import {
+  Button, EmptyState, Field, Header, IconButton, Loading, Press, ProgressBar, Screen, Segmented, Sheet, s,
+} from '@/components/ui';
 import { useAuth } from '@/lib/auth';
-import { Expense, Group, Invite, Member, supabase } from '@/lib/supabase';
-import { C, CATEGORIES, money } from '@/lib/theme';
+import { useFeedback } from '@/lib/feedback';
+import { Expense, supabase } from '@/lib/supabase';
+import { C, money, monthLabel, monthRange, R, S, sameMonth, shadow, T } from '@/lib/theme';
+import { displayName, useGroup } from '@/lib/useGroup';
 
 type Tab = 'overview' | 'activity' | 'members';
-const notify = (m: string) => (Platform.OS === 'web' ? window.alert(m) : Alert.alert(m));
-const confirm = (m: string, ok: () => void) =>
-  Platform.OS === 'web' ? (window.confirm(m) && ok())
-    : Alert.alert('Are you sure?', m, [{ text: 'Cancel', style: 'cancel' }, { text: 'Yes', style: 'destructive', onPress: ok }]);
 
 export default function GroupScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { session } = useAuth();
+  const { toast } = useFeedback();
   const me = session?.user.id ?? '';
-  const [group, setGroup] = useState<Group | null>(null);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [members, setMembers] = useState<Member[]>([]);
-  const [invites, setInvites] = useState<Invite[]>([]);
+  const { group, expenses, members, invites, loading, missing, reload } = useGroup(id);
+
   const [tab, setTab] = useState<Tab>('overview');
-  const [sheet, setSheet] = useState(false);
-  const [budgetEdit, setBudgetEdit] = useState<string | null>(null);
+  const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+  const [sheet, setSheet] = useState<{ open: boolean; editing: Expense | null }>({ open: false, editing: null });
+  const [budgetOpen, setBudgetOpen] = useState(false);
 
-  const load = useCallback(async () => {
-    const [g, e, m, i] = await Promise.all([
-      supabase.from('groups').select('*').eq('id', id).single(),
-      supabase.from('expenses').select('*').eq('group_id', id).order('spent_at', { ascending: false }).order('created_at', { ascending: false }),
-      supabase.from('group_members').select('user_id, role, profiles(full_name, email)').eq('group_id', id),
-      supabase.from('invites').select('*').eq('group_id', id).eq('status', 'pending'),
-    ]);
-    setGroup(g.data);
-    setExpenses(e.data ?? []);
-    setMembers((m.data ?? []) as any);
-    setInvites(i.data ?? []);
-  }, [id]);
-
-  useEffect(() => {
-    load();
-    const ch = supabase.channel(`group-${id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses', filter: `group_id=eq.${id}` }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'group_members', filter: `group_id=eq.${id}` }, load)
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [id]);
-
-  const nameOf = (uid: string) => {
-    const p = members.find((m) => m.user_id === uid)?.profiles;
-    return uid === me ? 'You' : p?.full_name || p?.email?.split('@')[0] || 'Member';
+  const isCurrent = sameMonth(month, new Date());
+  const shiftMonth = (n: number) => {
+    const next = new Date(month.getFullYear(), month.getMonth() + n, 1);
+    if (next > new Date()) return;
+    setMonth(next);
   };
 
-  const stats = useMemo(() => {
-    const start = new Date(); start.setDate(1);
-    const ms = start.toISOString().slice(0, 10);
-    const month = expenses.filter((e) => e.spent_at >= ms);
-    const spent = month.filter((e) => e.type === 'expense').reduce((a, e) => a + Number(e.amount), 0);
-    const income = month.filter((e) => e.type === 'income').reduce((a, e) => a + Number(e.amount), 0);
-    const byCat: Record<string, number> = {};
-    const byUser: Record<string, number> = {};
-    month.filter((e) => e.type === 'expense').forEach((e) => {
-      byCat[e.category] = (byCat[e.category] ?? 0) + Number(e.amount);
-      byUser[e.user_id] = (byUser[e.user_id] ?? 0) + Number(e.amount);
-    });
-    return { spent, income, byCat, byUser };
-  }, [expenses]);
+  const budget = Number(group?.monthly_budget ?? 0);
 
-  if (!group) return <Screen><View style={{ flex: 1 }} /></Screen>;
+  const stats: MonthStats = useMemo(() => {
+    const { start, end } = monthRange(month);
+    const items = expenses.filter((e) => e.spent_at >= start && e.spent_at <= end);
+    const out = items.filter((e) => e.type === 'expense');
+    const spent = out.reduce((a, e) => a + Number(e.amount), 0);
+    const income = items.filter((e) => e.type === 'income').reduce((a, e) => a + Number(e.amount), 0);
+    const tally = (key: (e: Expense) => string) => Object.entries(out.reduce<Record<string, number>>((a, e) => {
+      a[key(e)] = (a[key(e)] ?? 0) + Number(e.amount); return a;
+    }, {})).sort((a, b) => b[1] - a[1]);
+    const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+    const dayNow = isCurrent ? new Date().getDate() : daysInMonth;
+    const avgPerDay = spent / Math.max(1, dayNow);
+    return {
+      spent, income, items, avgPerDay,
+      byCat: tally((e) => e.category), byUser: tally((e) => e.user_id),
+      projected: isCurrent && spent > 0 ? avgPerDay * daysInMonth : null,
+      daysLeft: daysInMonth - dayNow + 1,
+    };
+  }, [expenses, month, isCurrent]);
+
+  if (loading) return <Screen><Loading /></Screen>;
+  if (missing || !group) {
+    return (
+      <Screen>
+        <EmptyState emoji="🫥" title="Group not found" body="It may have been deleted, or you're no longer a member."
+          action={<Button title="Back to groups" onPress={() => router.replace('/')} />} />
+      </Screen>
+    );
+  }
+
   const cur = group.currency;
   const myRole = members.find((m) => m.user_id === me)?.role;
-  const isAdmin = myRole === 'owner' || myRole === 'admin';
-  const budget = Number(group.monthly_budget);
+  const isOwner = group.owner_id === me;
+  const isAdmin = isOwner || myRole === 'admin';
   const left = budget - stats.spent;
-
-  const saveBudget = async () => {
-    const { error } = await supabase.from('groups').update({ monthly_budget: Number(budgetEdit) || 0 }).eq('id', id);
-    if (error) return notify(error.message);
-    setBudgetEdit(null); load();
-  };
+  const over = budget > 0 && left < 0;
+  const nameOf = (uid: string) => (uid === me ? 'You' : displayName(members.find((m) => m.user_id === uid)));
+  const canEdit = (e: Expense) => e.user_id === me;
+  const openTx = (e: Expense | null) => setSheet({ open: true, editing: e });
 
   return (
-    <Screen>
-      <ScrollView contentContainerStyle={{ padding: 20, gap: 16, paddingBottom: 120 }}>
-        <View style={[s.row, { gap: 12 }]}>
-          <Bouncy onPress={() => router.back()} style={{ padding: 8, borderRadius: 12, backgroundColor: C.card }}>
-            <Ionicons name="chevron-back" size={22} color={C.text} />
-          </Bouncy>
-          <Text style={{ fontSize: 28 }}>{group.emoji}</Text>
-          <Text style={{ color: C.text, fontSize: 24, fontWeight: '800', flex: 1 }} numberOfLines={1}>{group.name}</Text>
-        </View>
+    <Screen edges={['top']}>
+      <Header
+        left={<IconButton icon="chevron-back" label="Back" onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} />}
+        title={<Text>{group.emoji}  {group.name}</Text>}
+        right={<IconButton icon="people-outline" label="Members" onPress={() => setTab('members')} />} />
 
-        <Animated.View entering={FadeInDown.springify()}>
-          <LinearGradient colors={left < 0 ? ['#FF5C8A', '#B8264F'] : C.grad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ borderRadius: 26, padding: 22, gap: 6 }}>
-            <Text style={{ color: 'rgba(255,255,255,0.85)', fontWeight: '600' }}>
-              {budget > 0 ? (left >= 0 ? 'Left to spend this month' : 'Over budget by') : 'Spent this month'}
-            </Text>
-            <Animated.Text key={String(left)} entering={ZoomIn.springify()} style={{ color: '#fff', fontSize: 40, fontWeight: '800' }}>
-              {money(budget > 0 ? Math.abs(left) : stats.spent, cur)}
-            </Animated.Text>
-            {budget > 0 && <ProgressBar value={stats.spent / budget} color="#ffffff" />}
-            <View style={[s.row, { justifyContent: 'space-between', marginTop: 6 }]}>
-              <Text style={{ color: '#fff' }}>↓ {money(stats.spent, cur)}</Text>
-              <Text style={{ color: '#fff' }}>↑ {money(stats.income, cur)}</Text>
-              <Pressable onPress={() => isAdmin && setBudgetEdit(String(budget || ''))}>
-                <Text style={{ color: '#fff', fontWeight: '700' }}>
-                  Budget {budget > 0 ? money(budget, cur) : '—'} {isAdmin ? '✎' : ''}
-                </Text>
-              </Pressable>
+      <ScrollView contentContainerStyle={{ padding: S.xl, paddingTop: S.sm, gap: S.xl, paddingBottom: 120 }}
+        keyboardShouldPersistTaps="handled">
+        {/* Summary hero */}
+        <Animated.View entering={FadeInDown.duration(400)}>
+          <LinearGradient colors={over ? C.heroOver : C.hero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+            style={{ borderRadius: R.lg, padding: S.xl, gap: S.md }}>
+            <View style={[s.row, { justifyContent: 'space-between' }]}>
+              <Press onPress={() => shiftMonth(-1)} accessibilityLabel="Previous month" style={hstyles.monthBtn}>
+                <Ionicons name="chevron-back" size={16} color="#fff" />
+              </Press>
+              <Press onPress={() => !isCurrent && setMonth(new Date(new Date().getFullYear(), new Date().getMonth(), 1))}>
+                <Text style={{ color: '#fff', fontWeight: '700' }}>{monthLabel(month)}</Text>
+              </Press>
+              <Press onPress={() => shiftMonth(1)} disabled={isCurrent} accessibilityLabel="Next month" style={hstyles.monthBtn}>
+                <Ionicons name="chevron-forward" size={16} color="#fff" />
+              </Press>
+            </View>
+
+            <View>
+              <Text style={hstyles.heroLabel}>
+                {budget > 0 ? (over ? 'Over budget by' : isCurrent ? 'Left to spend' : 'Under budget by') : 'Spent'}
+              </Text>
+              <Animated.Text key={`${month.getTime()}-${left}`} entering={FadeIn.duration(300)}
+                style={{ color: '#fff', fontSize: 40, fontWeight: '800', letterSpacing: -1, fontVariant: ['tabular-nums'] }}>
+                {money(budget > 0 ? Math.abs(left) : stats.spent, cur)}
+              </Animated.Text>
+            </View>
+
+            {budget > 0 && <ProgressBar value={stats.spent / budget} color="#fff" track="rgba(255,255,255,0.22)" />}
+
+            <View style={[s.row, { gap: S.sm }]}>
+              <Stat label="Spent" value={money(stats.spent, cur)} />
+              <Stat label="Income" value={money(stats.income, cur)} />
+              <Press onPress={isAdmin ? () => setBudgetOpen(true) : undefined} style={{ flex: 1 }}
+                accessibilityLabel="Edit monthly budget">
+                <Stat label={isAdmin ? 'Budget ✎' : 'Budget'} value={budget > 0 ? money(budget, cur) : 'Set'} />
+              </Press>
             </View>
           </LinearGradient>
         </Animated.View>
 
-        {budgetEdit !== null && (
-          <Animated.View entering={FadeInDown} exiting={FadeOut} style={[s.row, { gap: 10 }]}>
-            <View style={{ flex: 1 }}><Input icon="cash" keyboardType="decimal-pad" placeholder="Monthly budget" value={budgetEdit} onChangeText={setBudgetEdit} autoFocus /></View>
-            <Bouncy onPress={saveBudget} style={{ height: 52, width: 52, borderRadius: 14, backgroundColor: C.success, alignItems: 'center', justifyContent: 'center' }}>
-              <Ionicons name="checkmark" size={24} color="#0B0B1A" />
-            </Bouncy>
-          </Animated.View>
+        <Segmented<Tab> value={tab} onChange={setTab}
+          options={[{ value: 'overview', label: 'Overview' }, { value: 'activity', label: 'Activity' }, { value: 'members', label: 'Members' }]} />
+
+        {tab === 'overview' && (
+          <Overview stats={stats} cur={cur} budget={budget} nameOf={nameOf} canEdit={canEdit}
+            onSeeAll={() => setTab('activity')} onOpen={openTx} onAdd={() => openTx(null)} />
         )}
-
-        <View style={[s.row, { gap: 8, backgroundColor: C.card, padding: 5, borderRadius: 16 }]}>
-          {(['overview', 'activity', 'members'] as Tab[]).map((t) => (
-            <Pressable key={t} onPress={() => setTab(t)} style={{ flex: 1 }}>
-              <View style={{ paddingVertical: 10, borderRadius: 12, alignItems: 'center', overflow: 'hidden' }}>
-                {tab === t && (
-                  <Animated.View entering={FadeIn.duration(250)} style={{ position: 'absolute', inset: 0, top: 0, left: 0, right: 0, bottom: 0 }}>
-                    <LinearGradient colors={C.grad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1 }} />
-                  </Animated.View>
-                )}
-                <Text style={{ color: tab === t ? '#fff' : C.sub, fontWeight: '700', textTransform: 'capitalize' }}>{t}</Text>
-              </View>
-            </Pressable>
-          ))}
-        </View>
-
-        {tab === 'overview' && <Overview stats={stats} cur={cur} nameOf={nameOf} />}
-        {tab === 'activity' && <Activity expenses={expenses} cur={cur} me={me} nameOf={nameOf} reload={load} />}
+        {tab === 'activity' && (
+          <Activity items={stats.items} cur={cur} me={me} nameOf={nameOf} onOpen={openTx} canEdit={canEdit} />
+        )}
         {tab === 'members' && (
-          <Members group={group} members={members} invites={invites} me={me} isAdmin={isAdmin} reload={load}
-            onLeft={() => router.replace('/')} />
+          <Members group={group} members={members} invites={invites} me={me} isAdmin={isAdmin} isOwner={isOwner}
+            reload={reload} onLeft={() => router.replace('/')} />
         )}
       </ScrollView>
 
-      <Animated.View entering={ZoomIn.delay(300).springify()} style={{ position: 'absolute', right: 24, bottom: 32 }}>
-        <Bouncy onPress={() => setSheet(true)}>
-          <LinearGradient colors={C.grad} style={{ width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', shadowColor: C.primary, shadowOpacity: 0.6, shadowRadius: 16, elevation: 10 }}>
-            <Ionicons name="add" size={32} color="#fff" />
-          </LinearGradient>
-        </Bouncy>
-      </Animated.View>
+      {tab !== 'members' && (
+        <Animated.View entering={ZoomIn.delay(200).springify()} style={{ position: 'absolute', right: S.xl, bottom: S.xxl }}>
+          <Press onPress={() => openTx(null)} accessibilityLabel="Add transaction" style={hstyles.fab}>
+            <Ionicons name="add" size={22} color="#fff" />
+            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Add</Text>
+          </Press>
+        </Animated.View>
+      )}
 
-      <AddSheet visible={sheet} onClose={() => setSheet(false)} groupId={id!} me={me} cur={cur} onSaved={load} />
+      <TransactionSheet visible={sheet.open} editing={sheet.editing} onClose={() => setSheet({ open: false, editing: null })}
+        groupId={group.id} me={me} cur={cur} onSaved={reload} />
+      <BudgetSheet visible={budgetOpen} onClose={() => setBudgetOpen(false)} initial={budget} cur={cur}
+        onSave={async (v) => {
+          const { error } = await supabase.from('groups').update({ monthly_budget: v }).eq('id', group.id);
+          if (error) return error.message;
+          toast('Budget updated', 'success'); setBudgetOpen(false); reload();
+        }} />
     </Screen>
   );
 }
 
-function Overview({ stats, cur, nameOf }: { stats: any; cur: string; nameOf: (u: string) => string }) {
-  const cats = Object.entries(stats.byCat as Record<string, number>).sort((a, b) => b[1] - a[1]);
-  const users = Object.entries(stats.byUser as Record<string, number>).sort((a, b) => b[1] - a[1]);
-  const max = Math.max(1, ...cats.map((c) => c[1]));
-  const umax = Math.max(1, ...users.map((c) => c[1]));
-  if (!cats.length) return (
-    <Card style={{ alignItems: 'center', gap: 8, paddingVertical: 32 }}>
-      <Text style={{ fontSize: 40 }}>📊</Text>
-      <Sub>No spending this month yet. Tap + to add one.</Sub>
-    </Card>
-  );
+function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <>
-      <Card index={0} style={{ gap: 14 }}>
-        <Text style={{ color: C.text, fontWeight: '700', fontSize: 16 }}>By category</Text>
-        {cats.map(([c, v]) => {
-          const meta = CATEGORIES[c] ?? CATEGORIES.other;
-          return (
-            <View key={c} style={{ gap: 6 }}>
-              <View style={[s.row, { gap: 8 }]}>
-                <Ionicons name={meta.icon} size={16} color={meta.color} />
-                <Text style={{ color: C.text, flex: 1, textTransform: 'capitalize' }}>{c}</Text>
-                <Text style={{ color: C.text, fontWeight: '700' }}>{money(v, cur)}</Text>
-              </View>
-              <ProgressBar value={v / max} color={meta.color} />
-            </View>
-          );
-        })}
-      </Card>
-      <Card index={1} style={{ gap: 14 }}>
-        <Text style={{ color: C.text, fontWeight: '700', fontSize: 16 }}>Who spent</Text>
-        {users.map(([u, v]) => (
-          <View key={u} style={{ gap: 6 }}>
-            <View style={[s.row, { gap: 10 }]}>
-              <Avatar name={nameOf(u)} />
-              <Text style={{ color: C.text, flex: 1 }}>{nameOf(u)}</Text>
-              <Text style={{ color: C.text, fontWeight: '700' }}>{money(v, cur)}</Text>
-            </View>
-            <ProgressBar value={v / umax} color={C.accent} />
-          </View>
-        ))}
-      </Card>
-    </>
-  );
-}
-
-function Activity({ expenses, cur, me, nameOf, reload }: any) {
-  if (!expenses.length) return <Card><Sub style={{ textAlign: 'center' }}>No transactions yet.</Sub></Card>;
-  return expenses.map((e: Expense, i: number) => {
-    const meta = CATEGORIES[e.category] ?? CATEGORIES.other;
-    const inc = e.type === 'income';
-    return (
-      <Animated.View key={e.id} entering={FadeInDown.delay(Math.min(i, 10) * 50).springify()} exiting={FadeOut} layout={LinearTransition}>
-        <View style={[s.card, s.row, { gap: 14, padding: 14 }]}>
-          <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: meta.color + '30', alignItems: 'center', justifyContent: 'center' }}>
-            <Ionicons name={meta.icon} size={22} color={meta.color} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: C.text, fontWeight: '600' }}>{e.title}</Text>
-            <Sub>{nameOf(e.user_id)} · {new Date(e.spent_at + 'T00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</Sub>
-          </View>
-          <Text style={{ color: inc ? C.success : C.text, fontWeight: '800' }}>{inc ? '+' : '-'}{money(Number(e.amount), cur)}</Text>
-          {e.user_id === me && (
-            <Pressable hitSlop={10} onPress={() => confirm('Delete this transaction?', async () => {
-              await supabase.from('expenses').delete().eq('id', e.id); reload();
-            })}>
-              <Ionicons name="trash-outline" size={18} color={C.sub} />
-            </Pressable>
-          )}
-        </View>
-      </Animated.View>
-    );
-  });
-}
-
-function Members({ group, members, invites, me, isAdmin, reload, onLeft }: {
-  group: Group; members: Member[]; invites: Invite[]; me: string; isAdmin: boolean; reload: () => void; onLeft: () => void;
-}) {
-  const [email, setEmail] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const invite = async () => {
-    const e = email.trim().toLowerCase();
-    if (!/^\S+@\S+\.\S+$/.test(e)) return notify('Enter a valid email');
-    if (members.some((m) => m.profiles?.email === e)) return notify('Already a member');
-    setBusy(true);
-    const { error } = await supabase.from('invites').upsert({ group_id: group.id, email: e, invited_by: me, status: 'pending' }, { onConflict: 'group_id,email' });
-    setBusy(false);
-    if (error) return notify(error.message);
-    setEmail(''); reload();
-    shareCode(`I invited ${e} — `);
-  };
-
-  const shareCode = (prefix = '') => {
-    const msg = `${prefix}Join "${group.name}" on Budgetly with invite code: ${group.invite_code}`;
-    if (Platform.OS === 'web') {
-      navigator.clipboard?.writeText(group.invite_code);
-      if (!prefix) window.alert('Invite code copied to clipboard!');
-    } else Share.share({ message: msg });
-  };
-
-  return (
-    <>
-      <Card index={0} style={{ gap: 12 }}>
-        <Text style={{ color: C.text, fontWeight: '700', fontSize: 16 }}>Invite people</Text>
-        <Bouncy onPress={() => shareCode()} style={[s.row, { justifyContent: 'space-between', padding: 14, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: C.accent }]}>
-          <View>
-            <Sub>Invite code</Sub>
-            <Text style={{ color: C.accent, fontSize: 22, fontWeight: '800', letterSpacing: 3 }}>{group.invite_code}</Text>
-          </View>
-          <Ionicons name={Platform.OS === 'web' ? 'copy' : 'share-social'} size={22} color={C.accent} />
-        </Bouncy>
-        <Input icon="mail" placeholder="friend@email.com" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} onSubmitEditing={invite} />
-        <Button title="Send invite" icon="paper-plane" loading={busy} onPress={invite} />
-        <Sub>Invited users see the invite on their home screen after signing up with that email.</Sub>
-      </Card>
-
-      <Card index={1} style={{ gap: 12 }}>
-        <Text style={{ color: C.text, fontWeight: '700', fontSize: 16 }}>Members · {members.length}</Text>
-        {members.map((m) => {
-          const nm = m.profiles?.full_name || m.profiles?.email || 'Member';
-          return (
-            <Animated.View key={m.user_id} layout={LinearTransition} style={[s.row, { gap: 12 }]}>
-              <Avatar name={nm} />
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: C.text, fontWeight: '600' }}>{nm}{m.user_id === me ? ' (you)' : ''}</Text>
-                <Sub>{m.profiles?.email}</Sub>
-              </View>
-              <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99, backgroundColor: m.role === 'owner' ? 'rgba(255,181,71,0.2)' : C.card }}>
-                <Text style={{ color: m.role === 'owner' ? C.warn : C.sub, fontSize: 12, fontWeight: '700', textTransform: 'capitalize' }}>{m.role}</Text>
-              </View>
-              {group.owner_id === me && m.user_id !== me && (
-                <Pressable hitSlop={10} onPress={() => confirm(`Remove ${nm}?`, async () => {
-                  await supabase.from('group_members').delete().eq('group_id', group.id).eq('user_id', m.user_id); reload();
-                })}>
-                  <Ionicons name="remove-circle-outline" size={20} color={C.danger} />
-                </Pressable>
-              )}
-            </Animated.View>
-          );
-        })}
-        {invites.map((i) => (
-          <Animated.View key={i.id} entering={FadeInDown} exiting={FadeOut} style={[s.row, { gap: 12, opacity: 0.75 }]}>
-            <View style={{ width: 38, height: 38, borderRadius: 19, borderWidth: 1, borderStyle: 'dashed', borderColor: C.sub, alignItems: 'center', justifyContent: 'center' }}>
-              <Ionicons name="hourglass-outline" size={16} color={C.sub} />
-            </View>
-            <Text style={{ color: C.sub, flex: 1 }}>{i.email}</Text>
-            <Text style={{ color: C.sub, fontSize: 12 }}>pending</Text>
-            {isAdmin && (
-              <Pressable hitSlop={10} onPress={async () => { await supabase.from('invites').delete().eq('id', i.id); reload(); }}>
-                <Ionicons name="close" size={18} color={C.sub} />
-              </Pressable>
-            )}
-          </Animated.View>
-        ))}
-      </Card>
-
-      {group.owner_id === me ? (
-        <Button title="Delete group" icon="trash" variant="danger" onPress={() => confirm('Delete this group and all its data?', async () => {
-          const { error } = await supabase.from('groups').delete().eq('id', group.id);
-          error ? notify(error.message) : onLeft();
-        })} />
-      ) : (
-        <Button title="Leave group" icon="exit" variant="danger" onPress={() => confirm('Leave this group?', async () => {
-          await supabase.from('group_members').delete().eq('group_id', group.id).eq('user_id', me); onLeft();
-        })} />
-      )}
-    </>
-  );
-}
-
-function Avatar({ name }: { name: string }) {
-  const hue = [...name].reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
-  return (
-    <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: `hsl(${hue},70%,60%)`, alignItems: 'center', justifyContent: 'center' }}>
-      <Text style={{ color: '#0B0B1A', fontWeight: '800' }}>{name.slice(0, 1).toUpperCase()}</Text>
+    <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: R.sm, padding: S.sm, paddingHorizontal: S.md }}>
+      <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: '600' }}>{label}</Text>
+      <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14, fontVariant: ['tabular-nums'] }} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
     </View>
   );
 }
 
-function AddSheet({ visible, onClose, groupId, me, cur, onSaved }: {
-  visible: boolean; onClose: () => void; groupId: string; me: string; cur: string; onSaved: () => void;
+function BudgetSheet({ visible, onClose, initial, cur, onSave }: {
+  visible: boolean; onClose: () => void; initial: number; cur: string; onSave: (v: number) => Promise<string | void>;
 }) {
-  const [title, setTitle] = useState('');
-  const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('food');
-  const [type, setType] = useState<'expense' | 'income'>('expense');
+  const [v, setV] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-
-  const save = async () => {
-    const amt = Number(amount);
-    if (!title.trim() || !(amt > 0)) return notify('Add a title and a positive amount');
+  const [err, setErr] = useState<string | null>(null);
+  const submit = async () => {
     setBusy(true);
-    const { error } = await supabase.from('expenses').insert({ group_id: groupId, user_id: me, title: title.trim(), amount: amt, category, type });
-    setBusy(false);
-    if (error) return notify(error.message);
-    setTitle(''); setAmount(''); onSaved(); onClose();
+    const e = await onSave(v === null ? initial : Number(v) || 0);
+    setBusy(false); setErr(e || null); if (!e) setV(null);
   };
-
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
-      {visible && (
-        <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-          <Animated.View entering={FadeIn} exiting={FadeOut} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}>
-            <Pressable style={{ flex: 1 }} onPress={onClose} />
-          </Animated.View>
-          <Animated.View entering={SlideInDown.springify().damping(18)} exiting={SlideOutDown}
-            style={{ backgroundColor: '#15142B', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 22, gap: 14, borderWidth: 1, borderColor: C.cardBorder, width: '100%', maxWidth: 720, alignSelf: 'center' }}>
-            <View style={{ width: 44, height: 5, borderRadius: 3, backgroundColor: C.cardBorder, alignSelf: 'center' }} />
-            <View style={[s.row, { gap: 8, backgroundColor: C.card, padding: 5, borderRadius: 14 }]}>
-              {(['expense', 'income'] as const).map((t) => (
-                <Pressable key={t} onPress={() => setType(t)} style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center',
-                  backgroundColor: type === t ? (t === 'expense' ? C.danger : C.success) : 'transparent' }}>
-                  <Text style={{ color: type === t ? '#0B0B1A' : C.sub, fontWeight: '700', textTransform: 'capitalize' }}>{t}</Text>
-                </Pressable>
-              ))}
-            </View>
-            <Input icon="create" placeholder="What was it?" value={title} onChangeText={setTitle} />
-            <Input icon="cash" placeholder={`Amount (${cur})`} keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-              {Object.entries(CATEGORIES).map(([k, v]) => (
-                <Chip key={k} label={k} icon={v.icon} color={v.color} active={category === k} onPress={() => setCategory(k)} />
-              ))}
-            </ScrollView>
-            <Button title={`Add ${type}`} icon="checkmark-circle" loading={busy} onPress={save} />
-            <View style={{ height: 12 }} />
-          </Animated.View>
-        </View>
-      )}
-    </Modal>
+    <Sheet visible={visible} onClose={() => { setErr(null); setV(null); onClose(); }} title="Monthly budget"
+      footer={<Button title="Save budget" loading={busy} onPress={submit} />}>
+      <Text style={[T.body, { color: C.sub }]}>Shared spending limit for everyone in this group. Set it to 0 to turn the budget off.</Text>
+      <Field prefix={cur} keyboardType="decimal-pad" autoFocus placeholder={initial ? String(initial) : '0'}
+        defaultValue={initial ? String(initial) : ''} onChangeText={(t) => { setV(t.replace(/[^0-9.]/g, '')); setErr(null); }}
+        error={err} onSubmitEditing={submit} />
+    </Sheet>
   );
 }
+
+const hstyles = {
+  monthBtn: { width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center' } as const,
+  heroLabel: { color: 'rgba(255,255,255,0.8)', fontWeight: '600' } as const,
+  fab: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, height: 52, paddingHorizontal: S.xl, borderRadius: 26,
+    backgroundColor: C.primary, ...shadow(C.primary, 0.5, 16, 6),
+  } as any,
+};

@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from '@/lib/auth';
+import { FeedbackProvider } from '@/lib/feedback';
 import { C } from '@/lib/theme';
 
 function Gate() {
@@ -26,8 +27,10 @@ export default function Root() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: C.bg }}>
       <SafeAreaProvider>
         <AuthProvider>
-          <StatusBar style="light" />
-          <Gate />
+          <FeedbackProvider>
+            <StatusBar style="light" />
+            <Gate />
+          </FeedbackProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

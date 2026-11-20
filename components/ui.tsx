@@ -1,139 +1,314 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { LinearGradient } from 'expo-linear-gradient';
-import { ReactNode, useEffect } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import {
-  ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, TextInputProps, View, ViewStyle,
+  ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleProp, StyleSheet, Text,
+  TextInput, TextInputProps, TextStyle, View, ViewStyle,
 } from 'react-native';
 import Animated, {
-  Easing, FadeInDown, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSpring, withTiming,
+  Easing, FadeIn, FadeOut, SlideInDown, SlideOutDown, useAnimatedStyle, useSharedValue, withSpring, withTiming,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { C } from '@/lib/theme';
+import { C, IconName, R, S, T } from '@/lib/theme';
 
-export const tap = () => { if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); };
+export const tap = (style = Haptics.ImpactFeedbackStyle.Light) => {
+  if (Platform.OS !== 'web') Haptics.impactAsync(style);
+};
 
-export function Screen({ children }: { children: ReactNode }) {
+/* ---------- Layout ---------- */
+
+export function Screen({ children, edges }: { children: ReactNode; edges?: ('top' | 'bottom')[] }) {
   return (
-    <View style={{ flex: 1, backgroundColor: C.bg, overflow: 'hidden' }}>
-      <LinearGradient colors={C.gradCool} style={StyleSheet.absoluteFill} />
-      <Blob color="#7C5CFF" style={{ top: -80, left: -60 }} />
-      <Blob color="#FF5C8A" style={{ bottom: -100, right: -80 }} delay={1500} />
-      <SafeAreaView style={{ flex: 1, width: '100%', maxWidth: 720, alignSelf: 'center' }}>{children}</SafeAreaView>
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <SafeAreaView edges={edges ?? ['top', 'bottom']} style={{ flex: 1, width: '100%', maxWidth: 680, alignSelf: 'center' }}>
+        {children}
+      </SafeAreaView>
     </View>
   );
 }
 
-function Blob({ color, style, delay = 0 }: { color: string; style: ViewStyle; delay?: number }) {
-  const t = useSharedValue(0);
-  useEffect(() => {
-    t.value = withDelay(delay, withRepeat(withTiming(1, { duration: 6000, easing: Easing.inOut(Easing.sin) }), -1, true));
-  }, []);
-  const a = useAnimatedStyle(() => ({
-    transform: [{ translateX: t.value * 40 }, { translateY: t.value * 30 }, { scale: 1 + t.value * 0.15 }],
-  }));
+export function Header({ title, subtitle, left, right }: {
+  title?: ReactNode; subtitle?: ReactNode; left?: ReactNode; right?: ReactNode;
+}) {
   return (
-    <Animated.View pointerEvents="none"
-      style={[{ position: 'absolute', width: 300, height: 300, borderRadius: 150, backgroundColor: color, opacity: 0.18 }, style, a]} />
+    <View style={[s.row, { gap: S.md, paddingHorizontal: S.xl, paddingTop: S.md, paddingBottom: S.sm, minHeight: 56 }]}>
+      {left}
+      <View style={{ flex: 1 }}>
+        {subtitle ? <Text style={T.label} numberOfLines={1}>{subtitle}</Text> : null}
+        {title ? <Text style={T.title} numberOfLines={1}>{title}</Text> : null}
+      </View>
+      {right}
+    </View>
   );
 }
 
-export function Card({ children, style, index = 0 }: { children: ReactNode; style?: ViewStyle; index?: number }) {
+export function Section({ title, action, children, style }: {
+  title?: string; action?: ReactNode; children: ReactNode; style?: StyleProp<ViewStyle>;
+}) {
   return (
-    <Animated.View entering={FadeInDown.delay(index * 70).springify().damping(16)} style={[s.card, style]}>
+    <View style={[{ gap: S.sm }, style]}>
+      {(title || action) && (
+        <View style={[s.row, { justifyContent: 'space-between', paddingHorizontal: S.xs }]}>
+          <Text style={[T.label, { textTransform: 'uppercase', letterSpacing: 0.8, fontSize: 12 }]}>{title}</Text>
+          {action}
+        </View>
+      )}
       {children}
-    </Animated.View>
+    </View>
   );
 }
 
-export function Bouncy({ children, onPress, style }: { children: ReactNode; onPress?: () => void; style?: any }) {
+export function Card({ children, style, onPress }: { children: ReactNode; style?: StyleProp<ViewStyle>; onPress?: () => void }) {
+  if (onPress) return <Press onPress={onPress} style={[s.card, style]}>{children}</Press>;
+  return <View style={[s.card, style]}>{children}</View>;
+}
+
+export const Divider = () => <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: C.border }} />;
+
+/* ---------- Interaction ---------- */
+
+export function Press({ children, onPress, style, disabled, accessibilityLabel, scale = 0.97 }: {
+  children: ReactNode; onPress?: () => void; style?: StyleProp<ViewStyle>; disabled?: boolean;
+  accessibilityLabel?: string; scale?: number;
+}) {
   const sc = useSharedValue(1);
   const a = useAnimatedStyle(() => ({ transform: [{ scale: sc.value }] }));
+  // Flex/size props must sit on the outer Pressable (the real flex item), or they're ignored.
+  const flat = (StyleSheet.flatten(style) ?? {}) as Record<string, any>;
+  const outer: Record<string, any> = {};
+  const inner: Record<string, any> = { ...flat };
+  for (const k of ['flex', 'flexGrow', 'flexShrink', 'flexBasis', 'alignSelf', 'width', 'minWidth', 'maxWidth']) {
+    if (k in flat) { outer[k] = flat[k]; delete inner[k]; }
+  }
   return (
-    <Pressable
-      onPressIn={() => { sc.value = withSpring(0.95); }}
-      onPressOut={() => { sc.value = withSpring(1); }}
+    <Pressable style={outer}
+      accessibilityRole="button" accessibilityLabel={accessibilityLabel} disabled={disabled || !onPress}
+      onPressIn={() => { sc.value = withSpring(scale, { damping: 20, stiffness: 400 }); }}
+      onPressOut={() => { sc.value = withSpring(1, { damping: 20, stiffness: 400 }); }}
       onPress={() => { tap(); onPress?.(); }}>
-      <Animated.View style={[style, a]}>{children}</Animated.View>
+      <Animated.View style={[inner, a, disabled && { opacity: 0.5 }]}>{children}</Animated.View>
     </Pressable>
   );
 }
 
-export function Button({ title, onPress, loading, icon, variant = 'primary' }: {
-  title: string; onPress: () => void; loading?: boolean; icon?: any; variant?: 'primary' | 'ghost' | 'danger';
+type BtnVariant = 'primary' | 'secondary' | 'danger' | 'ghost';
+export function Button({ title, onPress, loading, icon, variant = 'primary', disabled, style }: {
+  title: string; onPress: () => void; loading?: boolean; icon?: IconName; variant?: BtnVariant;
+  disabled?: boolean; style?: StyleProp<ViewStyle>;
 }) {
-  const content = loading ? <ActivityIndicator color="#fff" /> : (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-      {icon && <Ionicons name={icon} size={18} color={variant === 'danger' ? C.danger : '#fff'} />}
-      <Text style={[s.btnText, variant === 'danger' && { color: C.danger }]}>{title}</Text>
-    </View>
-  );
+  const v = {
+    primary: { bg: C.primary, fg: C.onPrimary, border: C.primary },
+    secondary: { bg: C.surface2, fg: C.text, border: C.border },
+    danger: { bg: C.negativeSoft, fg: C.negative, border: 'transparent' },
+    ghost: { bg: 'transparent', fg: C.sub, border: 'transparent' },
+  }[variant];
   return (
-    <Bouncy onPress={loading ? undefined : onPress}>
-      {variant === 'primary' ? (
-        <LinearGradient colors={C.grad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.btn}>{content}</LinearGradient>
-      ) : (
-        <View style={[s.btn, {
-          backgroundColor: variant === 'danger' ? 'rgba(255,92,138,0.12)' : C.card,
-          borderWidth: 1, borderColor: variant === 'danger' ? 'rgba(255,92,138,0.35)' : C.cardBorder,
-        }]}>{content}</View>
+    <Press onPress={loading ? undefined : onPress} disabled={disabled} accessibilityLabel={title}
+      style={[s.btn, { backgroundColor: v.bg, borderColor: v.border }, style]}>
+      {loading ? <ActivityIndicator color={v.fg} /> : (
+        <>
+          {icon && <Ionicons name={icon} size={18} color={v.fg} />}
+          <Text style={{ color: v.fg, fontWeight: '700', fontSize: 15 }}>{title}</Text>
+        </>
       )}
-    </Bouncy>
+    </Press>
   );
 }
 
-export function Input({ icon, ...p }: TextInputProps & { icon?: any }) {
+export function IconButton({ icon, onPress, label, tone = 'default', size = 40 }: {
+  icon: IconName; onPress: () => void; label: string; tone?: 'default' | 'primary' | 'plain'; size?: number;
+}) {
+  const bg = tone === 'primary' ? C.primary : tone === 'plain' ? 'transparent' : C.surface2;
   return (
-    <View style={s.input}>
-      {icon && <Ionicons name={icon} size={18} color={C.sub} />}
-      <TextInput placeholderTextColor={C.sub} style={s.inputText} {...p} />
+    <Press onPress={onPress} accessibilityLabel={label}
+      style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}>
+      <Ionicons name={icon} size={size * 0.5} color={tone === 'primary' ? C.onPrimary : C.text} />
+    </Press>
+  );
+}
+
+/* ---------- Forms ---------- */
+
+export function Field({ label, icon, error, prefix, right, style, ...p }: TextInputProps & {
+  label?: string; icon?: IconName; error?: string | null; prefix?: string; right?: ReactNode;
+}) {
+  const [focus, setFocus] = useState(false);
+  return (
+    <View style={[{ gap: 6 }, style as any]}>
+      {label && <Text style={T.label}>{label}</Text>}
+      <View style={[s.input, focus && { borderColor: C.primary }, !!error && { borderColor: C.negative }]}>
+        {icon && <Ionicons name={icon} size={18} color={focus ? C.primary : C.muted} />}
+        {prefix && <Text style={{ color: C.sub, fontSize: 16 }}>{prefix}</Text>}
+        <TextInput
+          placeholderTextColor={C.muted} style={s.inputText}
+          onFocus={(e) => { setFocus(true); p.onFocus?.(e); }}
+          onBlur={(e) => { setFocus(false); p.onBlur?.(e); }}
+          {...p} />
+        {right}
+      </View>
+      {!!error && <Text style={{ color: C.negative, fontSize: 12 }}>{error}</Text>}
     </View>
   );
 }
 
-export function ProgressBar({ value, color }: { value: number; color?: string }) {
+export function Segmented<V extends string>({ options, value, onChange, tones }: {
+  options: { value: V; label: string }[]; value: V; onChange: (v: V) => void; tones?: Partial<Record<V, string>>;
+}) {
+  return (
+    <View style={[s.row, { backgroundColor: C.surface2, padding: 4, borderRadius: R.md, gap: 4 }]} accessibilityRole="tablist">
+      {options.map((o) => {
+        const active = o.value === value;
+        const tone = tones?.[o.value];
+        return (
+          <Pressable key={o.value} onPress={() => { tap(); onChange(o.value); }} style={{ flex: 1 }}
+            accessibilityRole="tab" accessibilityState={{ selected: active }}>
+            <View style={{
+              paddingVertical: 9, borderRadius: R.sm, alignItems: 'center',
+              backgroundColor: active ? (tone ? tone + '26' : C.surface) : 'transparent',
+              borderWidth: 1, borderColor: active ? (tone ?? C.borderStrong) : 'transparent',
+            }}>
+              <Text style={{ color: active ? (tone ?? C.text) : C.sub, fontWeight: '700', fontSize: 14 }}>{o.label}</Text>
+            </View>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+export function Chip({ label, active, onPress, icon, color }: {
+  label: string; active?: boolean; onPress: () => void; icon?: IconName; color?: string;
+}) {
+  const c = color ?? C.primary;
+  return (
+    <Press onPress={onPress} accessibilityLabel={label}
+      style={[s.chip, active && { backgroundColor: c + '22', borderColor: c }]}>
+      {icon && <Ionicons name={icon} size={14} color={active ? c : C.sub} />}
+      <Text style={{ color: active ? C.text : C.sub, fontWeight: '600', fontSize: 14 }}>{label}</Text>
+    </Press>
+  );
+}
+
+/* ---------- Display ---------- */
+
+/** `semantic` (default) tints the bar warn/negative as it nears or passes 100%. Turn it off for shares and other non-budget values. */
+export function ProgressBar({ value, color, height = 8, track = C.surface2, semantic = true }: {
+  value: number; color?: string; height?: number; track?: string; semantic?: boolean;
+}) {
   const w = useSharedValue(0);
   useEffect(() => {
-    w.value = withTiming(Math.max(0, Math.min(value, 1)), { duration: 1100, easing: Easing.out(Easing.cubic) });
+    w.value = withTiming(Math.max(0, Math.min(value, 1)), { duration: 700, easing: Easing.out(Easing.cubic) });
   }, [value]);
   const a = useAnimatedStyle(() => ({ width: `${w.value * 100}%` }));
-  const colors: [string, string] = value > 1 ? ['#FF5C8A', '#FF2E63'] : color ? [color, color] : ['#00D4C8', '#7C5CFF'];
+  const fill = !semantic ? color ?? C.primary : value > 1 ? C.negative : value > 0.85 ? C.warn : color ?? C.primary;
   return (
-    <View style={s.track}>
-      <Animated.View style={[{ height: '100%', borderRadius: 99, overflow: 'hidden' }, a]}>
-        <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1 }} />
-      </Animated.View>
+    <View style={{ height, borderRadius: R.pill, backgroundColor: track, overflow: 'hidden' }}>
+      <Animated.View style={[{ height: '100%', borderRadius: R.pill, backgroundColor: fill }, a]} />
     </View>
   );
 }
 
-export function Chip({ label, active, onPress, icon, color }: { label: string; active?: boolean; onPress: () => void; icon?: any; color?: string }) {
+export function Avatar({ name, size = 36 }: { name: string; size?: number }) {
+  const hue = [...name].reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
   return (
-    <Bouncy onPress={onPress} style={[s.chip, active && { backgroundColor: (color ?? C.primary) + '33', borderColor: color ?? C.primary }]}>
-      {icon && <Ionicons name={icon} size={14} color={active ? color ?? C.primary : C.sub} />}
-      <Text style={{ color: active ? C.text : C.sub, fontWeight: '600', textTransform: 'capitalize' }}>{label}</Text>
-    </Bouncy>
+    <View style={{
+      width: size, height: size, borderRadius: size / 2, backgroundColor: `hsla(${hue},70%,62%,0.18)`,
+      alignItems: 'center', justifyContent: 'center',
+    }}>
+      <Text style={{ color: `hsl(${hue},80%,72%)`, fontWeight: '800', fontSize: size * 0.4 }}>
+        {name.slice(0, 1).toUpperCase()}
+      </Text>
+    </View>
   );
 }
 
-export const H1 = ({ children }: { children: ReactNode }) => <Text style={s.h1}>{children}</Text>;
-export const Sub = ({ children, style }: { children: ReactNode; style?: any }) => <Text style={[s.sub, style]}>{children}</Text>;
+export function Badge({ label, tone = 'neutral' }: { label: string; tone?: 'neutral' | 'primary' | 'warn' | 'positive' | 'negative' }) {
+  const map = {
+    neutral: [C.surface2, C.sub], primary: [C.primarySoft, C.primary], warn: [C.warnSoft, C.warn],
+    positive: [C.positiveSoft, C.positive], negative: [C.negativeSoft, C.negative],
+  }[tone];
+  return (
+    <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: R.pill, backgroundColor: map[0] }}>
+      <Text style={{ color: map[1], fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</Text>
+    </View>
+  );
+}
+
+export function IconTile({ icon, color, size = 40 }: { icon: IconName; color: string; size?: number }) {
+  return (
+    <View style={{ width: size, height: size, borderRadius: size * 0.32, backgroundColor: color + '22', alignItems: 'center', justifyContent: 'center' }}>
+      <Ionicons name={icon} size={size * 0.5} color={color} />
+    </View>
+  );
+}
+
+export function EmptyState({ emoji, title, body, action }: { emoji: string; title: string; body?: string; action?: ReactNode }) {
+  return (
+    <View style={{ alignItems: 'center', paddingVertical: S.xxl, paddingHorizontal: S.xl, gap: S.sm }}>
+      <Text style={{ fontSize: 40 }}>{emoji}</Text>
+      <Text style={T.heading}>{title}</Text>
+      {body && <Text style={[T.body, { color: C.sub, textAlign: 'center' }]}>{body}</Text>}
+      {action && <View style={{ marginTop: S.sm, alignSelf: 'stretch' }}>{action}</View>}
+    </View>
+  );
+}
+
+export function Loading() {
+  return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={C.primary} /></View>;
+}
+
+/* ---------- Sheet ---------- */
+
+export function Sheet({ visible, onClose, title, children, footer }: {
+  visible: boolean; onClose: () => void; title?: string; children: ReactNode; footer?: ReactNode;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
+      {visible && (
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(150)} style={[StyleSheet.absoluteFill, { backgroundColor: C.scrim }]}>
+            <Pressable style={{ flex: 1 }} onPress={onClose} accessibilityLabel="Close" />
+          </Animated.View>
+          <Animated.View entering={SlideInDown.springify().damping(22).stiffness(220)} exiting={SlideOutDown.duration(180)} style={s.sheet}>
+            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: C.borderStrong, alignSelf: 'center', marginBottom: S.sm }} />
+            {title && (
+              <View style={[s.row, { justifyContent: 'space-between', marginBottom: S.sm }]}>
+                <Text style={T.heading}>{title}</Text>
+                <IconButton icon="close" label="Close" onPress={onClose} size={34} />
+              </View>
+            )}
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: S.lg }} style={{ flexGrow: 0 }}>
+              {children}
+            </ScrollView>
+            {footer && <View style={{ marginTop: S.lg }}>{footer}</View>}
+            <SafeAreaView edges={['bottom']} />
+          </Animated.View>
+        </KeyboardAvoidingView>
+      )}
+    </Modal>
+  );
+}
+
+export const txt = (style: TextStyle, extra?: TextStyle) => [style, extra];
 
 export const s = StyleSheet.create({
-  card: { backgroundColor: C.card, borderColor: C.cardBorder, borderWidth: 1, borderRadius: 22, padding: 18 },
-  btn: { height: 54, borderRadius: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
-  btnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  row: { flexDirection: 'row', alignItems: 'center' },
+  card: { backgroundColor: C.surface, borderColor: C.border, borderWidth: 1, borderRadius: R.lg, padding: S.lg },
+  btn: {
+    height: 50, borderRadius: R.md, alignItems: 'center', justifyContent: 'center', paddingHorizontal: S.xl,
+    flexDirection: 'row', gap: S.sm, borderWidth: 1,
+  },
   input: {
-    flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 14, borderWidth: 1, borderColor: C.cardBorder, paddingHorizontal: 14, height: 52,
+    flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.surface2,
+    borderRadius: R.md, borderWidth: 1, borderColor: C.border, paddingHorizontal: 14, height: 50,
   },
   inputText: { flex: 1, color: C.text, fontSize: 16, height: '100%', outlineStyle: 'none' } as any,
-  track: { height: 12, borderRadius: 99, backgroundColor: 'rgba(255,255,255,0.08)', overflow: 'hidden' },
   chip: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8,
-    borderRadius: 99, borderWidth: 1, borderColor: C.cardBorder, backgroundColor: C.card,
+    flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: R.pill, borderWidth: 1, borderColor: C.border, backgroundColor: C.surface2,
   },
-  h1: { color: C.text, fontSize: 30, fontWeight: '800', letterSpacing: -0.5 },
-  sub: { color: C.sub, fontSize: 14 },
-  row: { flexDirection: 'row', alignItems: 'center' },
+  sheet: {
+    backgroundColor: C.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: S.xl, paddingTop: S.md,
+    borderWidth: 1, borderColor: C.border, width: '100%', maxWidth: 680, alignSelf: 'center', maxHeight: '92%',
+  },
 });

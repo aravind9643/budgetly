@@ -1,71 +1,87 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, Text, View } from 'react-native';
-import Animated, {
-  FadeInDown, FadeInUp, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming,
-} from 'react-native-reanimated';
-import { Button, Card, H1, Input, Screen, Sub } from '@/components/ui';
+import { useState } from 'react';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import Animated, { FadeIn, FadeInDown, Layout } from 'react-native-reanimated';
+import { Button, Field, Screen, Segmented } from '@/components/ui';
+import { useFeedback } from '@/lib/feedback';
 import { supabase } from '@/lib/supabase';
-import { C } from '@/lib/theme';
+import { C, R, S, T } from '@/lib/theme';
 
-const notify = (t: string, m: string) => (Platform.OS === 'web' ? window.alert(`${t}\n${m}`) : Alert.alert(t, m));
+type Mode = 'in' | 'up';
 
 export default function Login() {
-  const [mode, setMode] = useState<'in' | 'up'>('in');
+  const { toast } = useFeedback();
+  const [mode, setMode] = useState<Mode>('in');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
-
-  const float = useSharedValue(0);
-  useEffect(() => {
-    float.value = withRepeat(withSequence(withTiming(-10, { duration: 1600 }), withTiming(0, { duration: 1600 })), -1);
-  }, []);
-  const floatStyle = useAnimatedStyle(() => ({ transform: [{ translateY: float.value }, { rotate: `${float.value / 2}deg` }] }));
+  const [errors, setErrors] = useState<{ email?: string; password?: string; form?: string }>({});
 
   const submit = async () => {
-    if (!email || !password) return notify('Missing info', 'Email and password are required.');
+    const e: typeof errors = {};
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) e.email = 'Enter a valid email address';
+    if (password.length < 6) e.password = 'Use at least 6 characters';
+    setErrors(e);
+    if (Object.keys(e).length) return;
     setBusy(true);
-    const { error } = mode === 'in'
+    const { error, data } = mode === 'in'
       ? await supabase.auth.signInWithPassword({ email: email.trim(), password })
-      : await supabase.auth.signUp({ email: email.trim(), password, options: { data: { full_name: name } } });
+      : await supabase.auth.signUp({ email: email.trim(), password, options: { data: { full_name: name.trim() } } });
     setBusy(false);
-    if (error) notify('Oops', error.message);
-    else if (mode === 'up') notify('Welcome!', 'Check your inbox to confirm your email (if confirmation is enabled).');
+    if (error) return setErrors({ form: error.message });
+    if (mode === 'up' && !data.session) toast('Check your inbox to confirm your email', 'success');
   };
 
   return (
     <Screen>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'center', padding: 24 }}>
-        <Animated.View entering={FadeInUp.springify()} style={{ alignItems: 'center', marginBottom: 28 }}>
-          <Animated.View style={floatStyle}>
-            <LinearGradient colors={C.grad} style={{ width: 88, height: 88, borderRadius: 28, alignItems: 'center', justifyContent: 'center' }}>
-              <Ionicons name="wallet" size={44} color="#fff" />
-            </LinearGradient>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: S.xl, gap: S.xxl }}
+          keyboardShouldPersistTaps="handled">
+          <Animated.View entering={FadeInDown.duration(500)} style={{ gap: S.md }}>
+            <View style={{ width: 52, height: 52, borderRadius: R.md, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="wallet" size={26} color="#fff" />
+            </View>
+            <Text style={[T.display, { fontSize: 34 }]}>
+              {mode === 'in' ? 'Welcome back' : 'Budget together'}
+            </Text>
+            <Text style={[T.body, { color: C.sub, fontSize: 16 }]}>
+              {mode === 'in'
+                ? 'Sign in to see where your shared money is going.'
+                : 'Create shared budgets with roommates, partners and trips.'}
+            </Text>
           </Animated.View>
-          <View style={{ height: 18 }} />
-          <H1>Budgetly</H1>
-          <Sub>Shared budgets for every crew</Sub>
-        </Animated.View>
 
-        <Card index={1} style={{ gap: 14 }}>
-          {mode === 'up' && (
-            <Animated.View entering={FadeInDown}>
-              <Input icon="person" placeholder="Full name" value={name} onChangeText={setName} />
-            </Animated.View>
-          )}
-          <Input icon="mail" placeholder="Email" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} />
-          <Input icon="lock-closed" placeholder="Password" secureTextEntry value={password} onChangeText={setPassword} onSubmitEditing={submit} />
-          <Button title={mode === 'in' ? 'Sign in' : 'Create account'} icon="arrow-forward" loading={busy} onPress={submit} />
-        </Card>
-
-        <Pressable onPress={() => setMode(mode === 'in' ? 'up' : 'in')} style={{ marginTop: 20, alignItems: 'center' }}>
-          <Text style={{ color: C.sub }}>
-            {mode === 'in' ? "New here? " : 'Already have an account? '}
-            <Text style={{ color: C.accent, fontWeight: '700' }}>{mode === 'in' ? 'Create account' : 'Sign in'}</Text>
-          </Text>
-        </Pressable>
+          <Animated.View entering={FadeInDown.delay(100).duration(500)} layout={Layout.springify()} style={{ gap: S.lg }}>
+            <Segmented<Mode> value={mode} onChange={(m) => { setMode(m); setErrors({}); }}
+              options={[{ value: 'in', label: 'Sign in' }, { value: 'up', label: 'Create account' }]} />
+            {mode === 'up' && (
+              <Animated.View entering={FadeIn}>
+                <Field label="Your name" icon="person-outline" placeholder="Alex Morgan" value={name}
+                  onChangeText={setName} autoComplete="name" textContentType="name" />
+              </Animated.View>
+            )}
+            <Field label="Email" icon="mail-outline" placeholder="you@example.com" autoCapitalize="none"
+              keyboardType="email-address" autoComplete="email" textContentType="emailAddress"
+              value={email} onChangeText={setEmail} error={errors.email} />
+            <Field label="Password" icon="lock-closed-outline" placeholder="At least 6 characters"
+              secureTextEntry={!show} value={password} onChangeText={setPassword} onSubmitEditing={submit}
+              autoComplete={mode === 'in' ? 'password' : 'new-password'} error={errors.password}
+              right={
+                <Pressable onPress={() => setShow(!show)} hitSlop={10} accessibilityLabel={show ? 'Hide password' : 'Show password'}>
+                  <Ionicons name={show ? 'eye-off-outline' : 'eye-outline'} size={18} color={C.muted} />
+                </Pressable>
+              } />
+            {errors.form && (
+              <View style={{ flexDirection: 'row', gap: S.sm, backgroundColor: C.negativeSoft, padding: S.md, borderRadius: R.md }}>
+                <Ionicons name="alert-circle" size={18} color={C.negative} />
+                <Text style={{ color: C.negative, flex: 1 }}>{errors.form}</Text>
+              </View>
+            )}
+            <Button title={mode === 'in' ? 'Sign in' : 'Create account'} loading={busy} onPress={submit} />
+          </Animated.View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </Screen>
   );

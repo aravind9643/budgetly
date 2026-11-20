@@ -22,8 +22,10 @@ Environment: `.env` / `.env.local` with `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUB
 ## Architecture
 - **Routing / auth gate**: `app/_layout.tsx` wraps everything in `AuthProvider` (`lib/auth.tsx`, which exposes `useAuth()` → `{session, loading}`). `Gate` redirects based on route group: unauthenticated users go to `(auth)/login`, authenticated users go to `(app)/`. Screens live under `app/(app)/` (home, `new-group` modal, `group/[id]` dashboard).
 - **Supabase client**: `lib/supabase.ts` is the single client. It uses AsyncStorage on native and default storage + `detectSessionInUrl` on web. Hand-written row types (`Group`, `Expense`, `Member`, `Invite`) live here. `lib/database.types.ts` holds the generated types.
-- **Realtime**: `group/[id].tsx` subscribes to a `group-${id}` channel and refetches on changes.
-- **UI**: `components/ui.tsx` is the shared animated UI kit (glass cards, gradient blobs, press springs, bottom sheet, haptics). Colors and tokens come from `C` in `lib/theme.ts`. The app is dark-only. Import with the `@/` path alias.
+- **Group data**: `lib/useGroup.ts` loads a group's transactions, members and invites and keeps them live through a Realtime channel. `app/(app)/group/[id].tsx` is a thin orchestrator. It computes the monthly stats and owns month navigation. Its tab bodies and the add/edit `TransactionSheet` live in `components/group/`.
+- **Design system**: `lib/theme.ts` holds the tokens: colors `C`, spacing `S`, radii `R`, type `T`, `CATEGORIES`, plus local-time date helpers (`ymd`, `monthRange`). Use those helpers rather than `toISOString()`, because `spent_at` is a plain DATE. `components/ui.tsx` holds the primitives (Screen, Header, Card, Button, Field, Segmented, Sheet, etc.). The app is dark-only. Import with the `@/` path alias.
+- **Feedback**: use `useFeedback()` from `lib/feedback.tsx` for `toast()` and `await confirm()`. Never use `Alert` or `window.alert`. The provider is mounted in `app/_layout.tsx`.
+- Group totals are kept per currency. Never add amounts across groups that use different currencies.
 
 ## Database (supabase/migrations)
 Tables: `profiles`, `groups`, `group_members` (role: owner/admin/member), `invites`, `expenses` (`type` is `expense` or `income`).
