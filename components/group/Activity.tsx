@@ -5,12 +5,13 @@ import { Card, Chip, Divider, EmptyState, Field, Section } from '@/components/ui
 import { Expense } from '@/lib/supabase';
 import { C, CATEGORIES, dayLabel, money, S, T } from '@/lib/theme';
 import { TransactionRow } from './TransactionRow';
+export type RowInfo = { who: string; splitCount: number; myShare?: number };
 
 type Filter = 'all' | 'expense' | 'income' | 'mine';
 
 /** Month's transactions grouped by day, with search and filters. */
-export function Activity({ items, cur, me, nameOf, onOpen, canEdit }: {
-  items: Expense[]; cur: string; me: string; nameOf: (u: string) => string;
+export function Activity({ items, cur, me, nameOf, rowInfo, onOpen, canEdit }: {
+  items: Expense[]; cur: string; me: string; nameOf: (u: string) => string; rowInfo: (e: Expense) => RowInfo;
   onOpen: (e: Expense) => void; canEdit: (e: Expense) => boolean;
 }) {
   const [q, setQ] = useState('');
@@ -19,7 +20,7 @@ export function Activity({ items, cur, me, nameOf, onOpen, canEdit }: {
   const days = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const list = items.filter((e) =>
-      (filter === 'all' || (filter === 'mine' ? e.user_id === me : e.type === filter)) &&
+      (filter === 'all' || (filter === 'mine' ? (e.paid_by ?? e.user_id) === me : e.type === filter)) &&
       (!needle || e.title.toLowerCase().includes(needle) || (CATEGORIES[e.category]?.label ?? '').toLowerCase().includes(needle)));
     const map = new Map<string, Expense[]>();
     list.forEach((e) => map.set(e.spent_at, [...(map.get(e.spent_at) ?? []), e]));
@@ -31,7 +32,7 @@ export function Activity({ items, cur, me, nameOf, onOpen, canEdit }: {
       <Field icon="search" placeholder="Search transactions" value={q} onChangeText={setQ} returnKeyType="search" />
       <View style={{ flexDirection: 'row', gap: S.sm, flexWrap: 'wrap' }}>
         {(['all', 'expense', 'income', 'mine'] as Filter[]).map((f) => (
-          <Chip key={f} label={{ all: 'All', expense: 'Expenses', income: 'Income', mine: 'Mine' }[f]}
+          <Chip key={f} label={{ all: 'All', expense: 'Expenses', income: 'Income', mine: 'Paid by me' }[f]}
             active={filter === f} onPress={() => setFilter(f)} />
         ))}
       </View>
@@ -52,7 +53,7 @@ export function Activity({ items, cur, me, nameOf, onOpen, canEdit }: {
                 {list.map((e, i) => (
                   <View key={e.id}>
                     {i > 0 && <Divider />}
-                    <TransactionRow e={e} cur={cur} who={nameOf(e.user_id)} onPress={canEdit(e) ? () => onOpen(e) : undefined} />
+                    <TransactionRow e={e} cur={cur} {...rowInfo(e)} onPress={canEdit(e) ? () => onOpen(e) : undefined} />
                   </View>
                 ))}
               </Card>

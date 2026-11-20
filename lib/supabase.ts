@@ -22,6 +22,14 @@ export type Group = {
 export type Expense = {
   id: string; group_id: string; user_id: string; title: string; amount: number;
   category: string; type: 'expense' | 'income'; spent_at: string;
+  paid_by: string; is_personal: boolean; split_type: SplitType;
 };
-export type Member = { user_id: string; role: string; profiles: { full_name: string | null; email: string | null } | null };
+export type SplitType = 'equal' | 'percent' | 'shares' | 'exact';
+export type Split = { expense_id: string; user_id: string; amount: number; weight: number | null };
+export type Settlement = {
+  id: string; group_id: string; from_user: string; to_user: string; amount: number;
+  note: string | null; created_by: string; settled_at: string; created_at: string;
+};
+export type Profile = { id: string; full_name: string | null; email: string | null };
+export type Member = { user_id: string; role: string; joined_at?: string; profiles: { full_name: string | null; email: string | null } | null };
 export type Invite = { id: string; group_id: string; email: string; status: string; groups?: Group | null };

@@ -6,6 +6,12 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { FeedbackProvider } from '@/lib/feedback';
 import { C } from '@/lib/theme';
+import { ThemeProvider, useThemeMode } from '@/lib/themeMode';
+
+function ThemedStatusBar() {
+  const { scheme } = useThemeMode();
+  return <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />;
+}
 
 function Gate() {
   const { session, loading } = useAuth();
@@ -27,10 +33,12 @@ export default function Root() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: C.bg }}>
       <SafeAreaProvider>
         <AuthProvider>
-          <FeedbackProvider>
-            <StatusBar style="light" />
-            <Gate />
-          </FeedbackProvider>
+          <ThemeProvider>
+            <FeedbackProvider>
+              <ThemedStatusBar />
+              <Gate />
+            </FeedbackProvider>
+          </ThemeProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

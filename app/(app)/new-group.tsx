@@ -4,6 +4,7 @@ import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-na
 import { Button, Card, Chip, Field, Header, IconButton, Press, Screen, Section } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { useFeedback } from '@/lib/feedback';
+import { useHousehold } from '@/lib/household';
 import { supabase } from '@/lib/supabase';
 import { C, money, R, S, T } from '@/lib/theme';
 
@@ -15,6 +16,7 @@ export default function NewGroup() {
   const router = useRouter();
   const { session } = useAuth();
   const { toast } = useFeedback();
+  const { refreshHouseholds, setActive } = useHousehold();
   const [name, setName] = useState('');
   const [emoji, setEmoji] = useState('💰');
   const [currency, setCurrency] = useState('USD');
@@ -23,7 +25,7 @@ export default function NewGroup() {
   const [err, setErr] = useState<string | null>(null);
 
   const create = async () => {
-    if (!name.trim()) return setErr('Give your group a name');
+    if (!name.trim()) return setErr('Give your household a name');
     if (!session) return;
     setBusy(true);
     const { data, error } = await supabase.from('groups').insert({
@@ -31,13 +33,14 @@ export default function NewGroup() {
     }).select('id').single();
     setBusy(false);
     if (error) return toast(error.message, 'error');
-    toast('Group created', 'success');
-    router.replace(`/group/${data.id}`);
+    toast('Household created', 'success');
+    await refreshHouseholds(); setActive(data.id);
+    router.replace('/');
   };
 
   return (
     <Screen>
-      <Header title="New group" right={<IconButton icon="close" label="Close" onPress={() => router.back()} />} />
+      <Header title="New household" right={<IconButton icon="close" label="Close" onPress={() => router.back()} />} />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={{ padding: S.xl, gap: S.xl }} keyboardShouldPersistTaps="handled">
           {/* Live preview */}
@@ -46,7 +49,7 @@ export default function NewGroup() {
               <Text style={{ fontSize: 26 }}>{emoji}</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={T.heading} numberOfLines={1}>{name.trim() || 'Your group'}</Text>
+              <Text style={T.heading} numberOfLines={1}>{name.trim() || 'Your household'}</Text>
               <Text style={T.caption}>
                 {Number(budget) > 0 ? `${money(Number(budget), currency)} / month` : 'No monthly budget'}
               </Text>
@@ -84,7 +87,7 @@ export default function NewGroup() {
           <Text style={[T.caption, { marginTop: -S.md }]}>You can change this any time from the group.</Text>
         </ScrollView>
         <View style={{ padding: S.xl, paddingTop: S.sm }}>
-          <Button title="Create group" loading={busy} onPress={create} />
+          <Button title="Create household" loading={busy} onPress={create} />
         </View>
       </KeyboardAvoidingView>
     </Screen>

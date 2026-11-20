@@ -6,10 +6,10 @@ import {
   TextInput, TextInputProps, TextStyle, View, ViewStyle,
 } from 'react-native';
 import Animated, {
-  Easing, FadeIn, FadeOut, SlideInDown, SlideOutDown, useAnimatedStyle, useSharedValue, withSpring, withTiming,
+  Easing, FadeIn, FadeOut, SlideInDown, SlideOutDown, useAnimatedStyle, useSharedValue, withRepeat, withSpring, withTiming,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { C, IconName, R, S, T } from '@/lib/theme';
+import { C, IconName, R, S, scheme, shadow, T } from '@/lib/theme';
 
 export const tap = (style = Haptics.ImpactFeedbackStyle.Light) => {
   if (Platform.OS !== 'web') Haptics.impactAsync(style);
@@ -118,10 +118,11 @@ export function Button({ title, onPress, loading, icon, variant = 'primary', dis
 export function IconButton({ icon, onPress, label, tone = 'default', size = 40 }: {
   icon: IconName; onPress: () => void; label: string; tone?: 'default' | 'primary' | 'plain'; size?: number;
 }) {
-  const bg = tone === 'primary' ? C.primary : tone === 'plain' ? 'transparent' : C.surface2;
+  const bg = tone === 'primary' ? C.primary : tone === 'plain' ? 'transparent' : C.surface;
   return (
     <Press onPress={onPress} accessibilityLabel={label}
-      style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}>
+      style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' },
+        tone === 'default' && (shadow(C.shadow, C.shadowOpacity + 0.02, 12, 3) as any)]}>
       <Ionicons name={icon} size={size * 0.5} color={tone === 'primary' ? C.onPrimary : C.text} />
     </Press>
   );
@@ -212,10 +213,10 @@ export function Avatar({ name, size = 36 }: { name: string; size?: number }) {
   const hue = [...name].reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
   return (
     <View style={{
-      width: size, height: size, borderRadius: size / 2, backgroundColor: `hsla(${hue},70%,62%,0.18)`,
-      alignItems: 'center', justifyContent: 'center',
+      width: size, height: size, borderRadius: size / 2, backgroundColor: `hsl(${hue},48%,42%)`,
+      alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: C.surface,
     }}>
-      <Text style={{ color: `hsl(${hue},80%,72%)`, fontWeight: '800', fontSize: size * 0.4 }}>
+      <Text style={{ color: '#fff', fontWeight: '800', fontSize: size * 0.4 }}>
         {name.slice(0, 1).toUpperCase()}
       </Text>
     </View>
@@ -251,6 +252,14 @@ export function EmptyState({ emoji, title, body, action }: { emoji: string; titl
       {action && <View style={{ marginTop: S.sm, alignSelf: 'stretch' }}>{action}</View>}
     </View>
   );
+}
+
+/** Pulsing placeholder block for skeleton screens. */
+export function Skeleton({ h, w = '100%', r = 14, style }: { h: number; w?: number | string; r?: number; style?: StyleProp<ViewStyle> }) {
+  const o = useSharedValue(0.5);
+  useEffect(() => { o.value = withRepeat(withTiming(1, { duration: 750 }), -1, true); }, []);
+  const a = useAnimatedStyle(() => ({ opacity: o.value }));
+  return <Animated.View style={[{ height: h, width: w as any, borderRadius: r, backgroundColor: C.border }, a, style]} />;
 }
 
 export function Loading() {
@@ -291,24 +300,36 @@ export function Sheet({ visible, onClose, title, children, footer }: {
 
 export const txt = (style: TextStyle, extra?: TextStyle) => [style, extra];
 
-export const s = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center' },
-  card: { backgroundColor: C.surface, borderColor: C.border, borderWidth: 1, borderRadius: R.lg, padding: S.lg },
+// Plain objects with getters (not StyleSheet.create) so colors follow the active light/dark scheme.
+export const s = {
+  row: { flexDirection: 'row', alignItems: 'center' } as ViewStyle,
+  get card(): ViewStyle {
+    return {
+      backgroundColor: C.surface, borderColor: scheme === 'dark' ? C.border : 'transparent', borderWidth: 1, borderRadius: 22, padding: S.lg,
+      ...(shadow(C.shadow, C.shadowOpacity, 18, 4) as any),
+    };
+  },
   btn: {
     height: 50, borderRadius: R.md, alignItems: 'center', justifyContent: 'center', paddingHorizontal: S.xl,
     flexDirection: 'row', gap: S.sm, borderWidth: 1,
+  } as ViewStyle,
+  get input(): ViewStyle {
+    return {
+      flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.surface2,
+      borderRadius: R.md, borderWidth: 1, borderColor: C.border, paddingHorizontal: 14, height: 50,
+    };
   },
-  input: {
-    flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.surface2,
-    borderRadius: R.md, borderWidth: 1, borderColor: C.border, paddingHorizontal: 14, height: 50,
+  get inputText() { return { flex: 1, color: C.text, fontSize: 16, height: '100%', outlineStyle: 'none' } as any; },
+  get chip(): ViewStyle {
+    return {
+      flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8,
+      borderRadius: R.pill, borderWidth: 1, borderColor: C.border, backgroundColor: C.surface2,
+    };
   },
-  inputText: { flex: 1, color: C.text, fontSize: 16, height: '100%', outlineStyle: 'none' } as any,
-  chip: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8,
-    borderRadius: R.pill, borderWidth: 1, borderColor: C.border, backgroundColor: C.surface2,
+  get sheet(): ViewStyle {
+    return {
+      backgroundColor: C.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: S.xl, paddingTop: S.md,
+      borderWidth: 1, borderColor: C.border, width: '100%', maxWidth: 680, alignSelf: 'center', maxHeight: '92%',
+    };
   },
-  sheet: {
-    backgroundColor: C.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: S.xl, paddingTop: S.md,
-    borderWidth: 1, borderColor: C.border, width: '100%', maxWidth: 680, alignSelf: 'center', maxHeight: '92%',
-  },
-});
+};

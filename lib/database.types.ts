@@ -39,6 +39,52 @@ export type Database = {
   }
   public: {
     Tables: {
+      expense_splits: {
+        Row: {
+          amount: number
+          expense_id: string
+          group_id: string
+          user_id: string
+          weight: number | null
+        }
+        Insert: {
+          amount: number
+          expense_id: string
+          group_id: string
+          user_id: string
+          weight?: number | null
+        }
+        Update: {
+          amount?: number
+          expense_id?: string
+          group_id?: string
+          user_id?: string
+          weight?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expense_splits_expense_id_fkey"
+            columns: ["expense_id"]
+            isOneToOne: false
+            referencedRelation: "expenses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expense_splits_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expense_splits_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       expenses: {
         Row: {
           amount: number
@@ -46,7 +92,10 @@ export type Database = {
           created_at: string | null
           group_id: string
           id: string
+          is_personal: boolean
+          paid_by: string
           spent_at: string
+          split_type: string
           title: string
           type: string
           user_id: string
@@ -57,7 +106,10 @@ export type Database = {
           created_at?: string | null
           group_id: string
           id?: string
+          is_personal?: boolean
+          paid_by: string
           spent_at?: string
+          split_type?: string
           title: string
           type?: string
           user_id: string
@@ -68,7 +120,10 @@ export type Database = {
           created_at?: string | null
           group_id?: string
           id?: string
+          is_personal?: boolean
+          paid_by?: string
           spent_at?: string
+          split_type?: string
           title?: string
           type?: string
           user_id?: string
@@ -79,6 +134,13 @@ export type Database = {
             columns: ["group_id"]
             isOneToOne: false
             referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_paid_by_fkey"
+            columns: ["paid_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -215,6 +277,71 @@ export type Database = {
         }
         Relationships: []
       }
+      settlements: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string
+          from_user: string
+          group_id: string
+          id: string
+          note: string | null
+          settled_at: string
+          to_user: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by: string
+          from_user: string
+          group_id: string
+          id?: string
+          note?: string | null
+          settled_at?: string
+          to_user: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string
+          from_user?: string
+          group_id?: string
+          id?: string
+          note?: string | null
+          settled_at?: string
+          to_user?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "settlements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "settlements_from_user_fkey"
+            columns: ["from_user"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "settlements_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "settlements_to_user_fkey"
+            columns: ["to_user"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -224,6 +351,22 @@ export type Database = {
       join_group_by_code: { Args: { code: string }; Returns: string }
       respond_invite: {
         Args: { accept: boolean; invite_id: string }
+        Returns: string
+      }
+      save_expense: {
+        Args: {
+          p_amount: number
+          p_category: string
+          p_group: string
+          p_id: string
+          p_paid_by: string
+          p_personal: boolean
+          p_spent_at: string
+          p_split_type: string
+          p_splits: Json
+          p_title: string
+          p_type: string
+        }
         Returns: string
       }
     }

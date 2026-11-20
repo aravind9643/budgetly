@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { createContext, ReactNode, useCallback, useContext, useRef, useState } from 'react';
-import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import Animated, { FadeIn, FadeInUp, FadeOut, FadeOutUp, ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, R, S, shadow, T } from './theme';
@@ -76,18 +76,23 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
   );
 }
 
-const styles = StyleSheet.create({
-  toastWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center', paddingHorizontal: S.lg, zIndex: 100 },
-  toast: {
-    flexDirection: 'row', alignItems: 'center', gap: S.sm, width: '100%', maxWidth: 480,
-    backgroundColor: C.surface2, borderColor: C.borderStrong, borderWidth: 1, borderRadius: R.md,
-    paddingHorizontal: S.lg, paddingVertical: S.md,
-    ...shadow('#000000', 0.4, 20, 8),
+// Getters (not StyleSheet.create) so colors follow the active light/dark scheme.
+const styles = {
+  toastWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center', paddingHorizontal: S.lg, zIndex: 100 } as ViewStyle,
+  get toast(): ViewStyle {
+    return {
+      flexDirection: 'row', alignItems: 'center', gap: S.sm, width: '100%', maxWidth: 480,
+      backgroundColor: C.surface, borderColor: C.borderStrong, borderWidth: 1, borderRadius: R.md,
+      paddingHorizontal: S.lg, paddingVertical: S.md,
+      ...(shadow('#000000', 0.25, 20, 8) as any),
+    };
   },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: S.xl },
-  dialog: {
-    width: '100%', maxWidth: 380, backgroundColor: C.surface, borderRadius: R.lg, borderWidth: 1,
-    borderColor: C.border, padding: S.xl, gap: S.sm,
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: S.xl } as ViewStyle,
+  get dialog(): ViewStyle {
+    return {
+      width: '100%', maxWidth: 380, backgroundColor: C.surface, borderRadius: R.lg, borderWidth: 1,
+      borderColor: C.border, padding: S.xl, gap: S.sm,
+    };
   },
-  dBtn: { flex: 1, height: 46, borderRadius: R.md, alignItems: 'center', justifyContent: 'center' },
-});
+  dBtn: { flex: 1, height: 46, borderRadius: R.md, alignItems: 'center', justifyContent: 'center' } as ViewStyle,
+};
