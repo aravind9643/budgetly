@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, Share, View } from 'react-native';
 import { Text } from '@/components/Typography';
 import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 import { Avatar, Badge, Button, Card, Divider, EmptyState, Field, Section, Sheet, s } from '@/components/ui';
@@ -79,6 +79,12 @@ export function Balances({ groupId, me, cur, net, transfers, settlements, nameOf
                         {money(t.amount, cur)}
                       </Text>
                     </View>
+                    {t.to === me && (
+                      <Pressable accessibilityLabel={`Remind ${nameOf(t.from)}`} hitSlop={8} style={{ padding: S.xs }}
+                        onPress={() => Share.share({ message: `Hi ${nameOf(t.from)}, a reminder from Budgetly: you owe me ${money(t.amount, cur)}. Thanks!` }).catch(() => {})}>
+                        <Ionicons name="notifications-outline" size={20} color={C.sub} />
+                      </Pressable>
+                    )}
                     {involved && (
                       <Button title={t.from === me ? 'Settle' : 'Received'} variant="secondary" onPress={() => setSettle(t)}
                         style={{ height: 38, paddingHorizontal: S.md }} />

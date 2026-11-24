@@ -169,9 +169,16 @@ export function TransactionSheet({ visible, onClose, groupId, me, cur, editing, 
     setBusy(false);
     if (error) return setErr({ form: error.message });
     onSaved(); onClose();
+    // The photo is kept only for the Undo window, then removed so storage doesn't fill with orphans.
+    let restored = false;
+    if (snapshot.receipt_path) {
+      const path = snapshot.receipt_path;
+      setTimeout(() => { if (!restored) supabase.storage.from('receipts').remove([path]); }, 8000);
+    }
     toast(`"${snapshot.title}" deleted`, 'info', {
       label: 'Undo',
       onPress: async () => {
+        restored = true;
         const { data: id, error: e } = await supabase.rpc('save_expense', {
           p_id: null, p_group: groupId, p_title: snapshot.title, p_amount: Number(snapshot.amount), p_category: snapshot.category,
           p_type: snapshot.type, p_spent_at: snapshot.spent_at, p_paid_by: snapshot.paid_by, p_personal: snapshot.is_personal,

@@ -9,10 +9,10 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.example.budgetly"
+      "bundleIdentifier": "com.aravind9643.budgetly"
     },
     "android": {
-      "package": "com.example.budgetly"
+      "package": "com.aravind9643.budgetly"
     },
     "web": {
       "bundler": "metro",

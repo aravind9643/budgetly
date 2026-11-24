@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { Text } from '@/components/Typography';
@@ -17,6 +17,8 @@ import { ThemePref, useThemeMode } from '@/lib/themeMode';
 export default function Settings() {
   useThemeMode(); // re-render this screen when light/dark changes
   const router = useRouter();
+  const { reset } = useLocalSearchParams<{ reset?: string }>();
+  const [pwOpen, setPwOpen] = useState(reset === '1'); // opened by the password-reset email link
   const { session } = useAuth();
   const { toast, confirm } = useFeedback();
   const { households, invites, activeId, setActive, refreshHouseholds, data } = useHousehold();
@@ -107,6 +109,12 @@ export default function Settings() {
           </Card>
         </Section>
 
+        <Section title="Account">
+          <Card style={{ padding: 0, overflow: 'hidden' }}>
+            <ListRow icon="key-outline" tint={C.primary} title="Change password" subtitle="Use at least 6 characters" onPress={() => setPwOpen(true)} />
+          </Card>
+        </Section>
+
         <Section title="Privacy">
           <Card style={[s.row, { gap: S.md }]}>
             <Ionicons name="lock-closed-outline" size={20} color={C.sub} />
@@ -119,6 +127,7 @@ export default function Settings() {
         <Button title="Sign out" variant="danger" icon="log-out-outline"
           onPress={async () => { if (await confirm({ title: 'Sign out?', message: email, confirmLabel: 'Sign out' })) supabase.auth.signOut(); }} />
       </ScrollView>
+      <PasswordSheet visible={pwOpen} onClose={() => setPwOpen(false)} />
 
       <EditName visible={edit} initial={name} onClose={() => setEdit(false)}
         onSaved={() => { setEdit(false); toast('Name updated', 'success'); refreshHouseholds(); data.reload(); }} />
@@ -150,6 +159,30 @@ function EditName({ visible, initial, onClose, onSaved }: { visible: boolean; in
     <Sheet visible={visible} onClose={onClose} title="Your name" footer={<Button title="Save" loading={busy} onPress={save} />}>
       <Text style={[T.body, { color: C.sub }]}>Shown to the people you share spaces with.</Text>
       <Field defaultValue={initial} onChangeText={(t) => { setV(t); setErr(null); }} autoFocus error={err} onSubmitEditing={save} maxLength={40} />
+    </Sheet>
+  );
+}
+
+function PasswordSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const { toast } = useFeedback();
+  const [pw, setPw] = useState('');
+  const [err, setErr] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    if (pw.length < 6) return setErr('Use at least 6 characters');
+    setBusy(true);
+    const { error } = await supabase.auth.updateUser({ password: pw });
+    setBusy(false);
+    if (error) return setErr(error.message);
+    setPw(''); setErr(undefined); onClose(); toast('Password changed', 'success');
+  };
+  return (
+    <Sheet visible={visible} onClose={onClose} title="New password">
+      <View style={{ gap: S.lg }}>
+        <Field label="New password" icon="lock-closed-outline" placeholder="At least 6 characters" secureTextEntry
+          autoComplete="new-password" value={pw} onChangeText={(t) => { setPw(t); setErr(undefined); }} onSubmitEditing={save} error={err} />
+        <Button title="Save password" loading={busy} onPress={save} />
+      </View>
     </Sheet>
   );
 }

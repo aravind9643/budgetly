@@ -15,7 +15,8 @@
     "db:push": "supabase db push --remote",
     "db:types": "supabase gen types typescript --remote > lib/database.types.ts",
     "test": "node --test \"tests/*.test.ts\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:rls": "node scripts/rls-check.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.2.3",

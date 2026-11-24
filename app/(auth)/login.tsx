@@ -37,6 +37,17 @@ export default function Login() {
     if (mode === 'up' && !data.session) toast('Check your inbox to confirm your email', 'success');
   };
 
+  const forgot = async () => {
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) return setErrors({ email: 'Enter your email first, then tap "Forgot password?"' });
+    setBusy(true);
+    const redirectTo = Platform.OS === 'web' && typeof window !== 'undefined'
+      ? `${window.location.origin}/settings?reset=1` : 'budgetly://settings?reset=1';
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
+    setBusy(false);
+    if (error) return setErrors({ form: error.message });
+    toast('If that email has an account, a reset link is on its way', 'success');
+  };
+
   return (
     <Screen>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
@@ -83,6 +94,11 @@ export default function Login() {
               </View>
             )}
             <Button title={mode === 'in' ? 'Sign in' : 'Create account'} loading={busy} onPress={submit} />
+            {mode === 'in' && (
+              <Pressable onPress={forgot} hitSlop={8} accessibilityRole="button" style={{ alignSelf: 'center' }}>
+                <Text style={{ color: C.primary, fontWeight: '600' }}>Forgot password?</Text>
+              </Pressable>
+            )}
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>

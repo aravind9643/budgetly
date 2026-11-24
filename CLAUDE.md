@@ -13,6 +13,8 @@ npm run typecheck             # tsc --noEmit
 npm test                      # node --test "tests/*.test.ts" (Node 22.18+/24 runs TS natively)
 node --test --test-name-pattern="simplifyDebts" "tests/*.test.ts"   # run one test group
 
+npm run test:rls              # read-only RLS check against the linked project (needs MEMBER_/OUTSIDER_ EMAIL+PASSWORD env)
+
 npm run db:start / db:stop    # local Supabase (Docker)
 npm run db:reset              # re-apply all migrations locally
 npx supabase migration new <name>
@@ -35,7 +37,7 @@ Environment: `.env` / `.env.local` with `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUB
 - **Testable logic stays pure**: `lib/balances.ts` and `lib/alerts.ts` must not import React Native (use `import type` only) so `npm test` can run them in plain Node. CI (`.github/workflows/ci.yml`) runs the type check, the tests and a web build on every push and pull request.
 - **Typography**: import `Text`/`TextInput` from `@/components/Typography`, not from `react-native`. The wrapper maps `fontWeight` to the matching Inter file, because custom fonts ignore `fontWeight` on native. Fonts load in `ThemeProvider`.
 - **Light/dark without remount**: every route, layout and global overlay calls `useThemeMode()` so a theme change re-renders it in place. Add that call to new screens.
-- **Space features**: recurring rules (`recurring_expenses`) are materialised server-side by the `run_recurring` RPC, which `useGroup` calls when a space opens. Per-category limits live in `category_budgets`. In-app budget alerts come from `budgetAlerts()` in `HouseholdProvider` (a toast fires when a limit crosses 80% or 100%). Custom categories (`categories`) are merged into `catMeta()`/`allCategories()` via `setCustomCategories`, and they render an emoji. Receipts are stored in the private storage bucket `receipts/<group_id>/<expense_id>.jpg` and shown through signed URLs. `reset_balances` is the owner-only "Start fresh".
+- **Space features**: recurring rules (`recurring_expenses`) are materialised server-side by the `run_recurring` RPC, which `useGroup` calls when a space opens. Per-category limits live in `category_budgets`. In-app budget alerts come from `budgetAlerts()` in `HouseholdProvider` (a toast fires when a limit crosses 80% or 100%). Custom categories (`categories`) are merged into `catMeta()`/`allCategories()` via `setCustomCategories`, and they render an emoji. Receipts (removed from storage once the delete-Undo window closes) are stored in the private storage bucket `receipts/<group_id>/<expense_id>.jpg` and shown through signed URLs. `reset_balances` is the owner-only "Start fresh".
 - **Invite links**: `/join/<code>` (web) and `budgetly://join/<code>` (apps) park the code with `lib/links.ts`. `HouseholdProvider` redeems it after sign-in.
 - Group totals are kept per currency. Never add amounts across groups that use different currencies.
 
@@ -48,4 +50,4 @@ Tables: `profiles`, `groups`, `group_members` (role: owner/admin/member), `invit
 - Schema changes go in a new migration file. Never edit applied migrations. Run `db:types` after changing the schema.
 
 ## Deployment
-Web deploys to Vercel (`vercel.json`: expo web export → `dist/`, SPA rewrite to `/index.html`). Native builds use EAS (`npx eas build -p android|ios`). `app.json` still has placeholder `com.example.budgetly` identifiers.
+Web deploys to Vercel (`vercel.json`: expo web export → `dist/`, SPA rewrite to `/index.html`). Native builds use EAS (`npx eas build -p android|ios`). App identifier: `com.aravind9643.budgetly` (iOS and Android).
