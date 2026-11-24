@@ -2,7 +2,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { ScrollView } from 'react-native';
 import { Balances } from '@/components/group/Balances';
-import { BackButton, PageTitle } from '@/components/Nav';
+import { SpaceHeader } from '@/components/SpaceHeader';
+import { View } from 'react-native';
 import { Loading, Screen } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { computeBalances, simplifyDebts } from '@/lib/balances';
@@ -10,7 +11,7 @@ import { useHousehold } from '@/lib/household';
 import { S } from '@/lib/theme';
 import { displayName, useGroup } from '@/lib/useGroup';
 
-/** Who owes who for a household (`?g=` id, defaulting to the active one). */
+/** Balances tab: who owes what in the active space (or `?g=<space id>`). */
 export default function BalancesScreen() {
   const router = useRouter();
   const { g } = useLocalSearchParams<{ g?: string }>();
@@ -31,11 +32,11 @@ export default function BalancesScreen() {
   };
 
   return (
-    <Screen>
-      <PageTitle left={<BackButton onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} />}
-        eyebrow={group?.name} title="Who owes who" />
+    <Screen edges={['top']}>
+      <SpaceHeader title="Balances" />
+      <View style={{ height: S.lg }} />
       {loading || !group ? <Loading /> : (
-        <ScrollView contentContainerStyle={{ paddingHorizontal: S.xl, paddingBottom: 48 }}>
+        <ScrollView contentContainerStyle={{ paddingHorizontal: S.xl, paddingBottom: 40 }}>
           <Balances groupId={group.id} me={me} cur={group.currency} net={net} transfers={transfers} settlements={settlements}
             nameOf={nameOf} isFormer={(u) => !memberIds.includes(u)} reload={reload} />
         </ScrollView>

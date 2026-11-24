@@ -17,8 +17,8 @@ export function JoinSheet({ visible, onClose, onJoined }: { visible: boolean; on
     setCode(''); setErr(null); onJoined(data);
   };
   return (
-    <Sheet visible={visible} onClose={onClose} title="Join with an invitation"
-      footer={<Button title="Join household" loading={busy} onPress={join} />}>
+    <Sheet visible={visible} onClose={onClose} title="Have a code?"
+      footer={<Button title="Join space" loading={busy} onPress={join} />}>
       <Text style={[T.body, { color: C.sub }]}>Ask a member for their 8-character invite code.</Text>
       <Field placeholder="8F3A2C1D" autoCapitalize="characters" autoCorrect={false} autoFocus maxLength={12}
         value={code} onChangeText={(t) => { setCode(t.toUpperCase()); setErr(null); }} onSubmitEditing={join}

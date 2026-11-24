@@ -41,7 +41,7 @@ export default function Login() {
           keyboardShouldPersistTaps="handled">
           <Animated.View entering={FadeInDown.duration(500)} style={{ gap: S.md }}>
             <View style={{ width: 52, height: 52, borderRadius: R.md, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' }}>
-              <Ionicons name="wallet" size={26} color="#fff" />
+              <Ionicons name="wallet" size={26} color={C.onPrimary} />
             </View>
             <Text style={[T.display, { fontSize: 34 }]}>
               {mode === 'in' ? 'Welcome back' : 'Budget together'}

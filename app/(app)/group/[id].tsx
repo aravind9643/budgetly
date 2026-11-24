@@ -16,8 +16,8 @@ import { Member, supabase } from '@/lib/supabase';
 import { C, money, R, S, T } from '@/lib/theme';
 import { displayName, useGroup } from '@/lib/useGroup';
 
-/** Household page: members, invites, and the "Manage" list (budget, balances, export), plus leave/delete. */
-export default function HouseholdScreen() {
+/** Space settings: people, invites, budget/balances/export, plus leave/delete. */
+export default function SpaceScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { session } = useAuth();
@@ -37,8 +37,8 @@ export default function HouseholdScreen() {
   if (missing || !group) {
     return (
       <Screen>
-        <EmptyState emoji="🫥" title="Household not found" body="It may have been deleted, or you're no longer a member."
-          action={<Button title="Back" onPress={() => router.replace('/households')} />} />
+        <EmptyState emoji="🫥" title="Space not found" body="It may have been deleted, or you're no longer a member."
+          action={<Button title="Back" onPress={() => router.replace('/settings')} />} />
       </Screen>
     );
   }
@@ -58,7 +58,7 @@ export default function HouseholdScreen() {
       title: `Remove ${nm}?`, confirmLabel: 'Remove', destructive: true,
       message: Math.abs(bal) >= 0.005
         ? `${nm} ${bal > 0 ? 'is owed' : 'owes'} ${money(Math.abs(bal), cur)}. Their balance stays visible as a former member.`
-        : 'They will lose access to this household.',
+        : 'They will lose access to this space.',
     });
     if (!ok) return;
     const { error } = await supabase.from('group_members').delete().eq('group_id', group.id).eq('user_id', m.user_id);
@@ -68,9 +68,9 @@ export default function HouseholdScreen() {
 
   const leaveOrDelete = async () => {
     const ok = await confirm(isOwner
-      ? { title: 'Delete household?', message: 'All expenses will be permanently deleted for every member.', confirmLabel: 'Delete', destructive: true }
+      ? { title: 'Delete space?', message: 'Every entry in this space will be permanently deleted for everyone.', confirmLabel: 'Delete', destructive: true }
       : {
-        title: 'Leave household?', confirmLabel: 'Leave', destructive: true,
+        title: 'Leave space?', confirmLabel: 'Leave', destructive: true,
         message: Math.abs(myNet) >= 0.005
           ? `You still ${myNet > 0 ? 'are owed' : 'owe'} ${money(Math.abs(myNet), cur)}. Your balance stays visible to the others.`
           : 'You can rejoin later with an invite code.',
@@ -80,12 +80,12 @@ export default function HouseholdScreen() {
       ? await supabase.from('groups').delete().eq('id', group.id)
       : await supabase.from('group_members').delete().eq('group_id', group.id).eq('user_id', me);
     if (error) return toast(error.message, 'error');
-    toast(isOwner ? 'Household deleted' : 'You left the household', 'success');
+    toast(isOwner ? 'Space deleted' : 'You left the space', 'success');
     await refreshHouseholds();
-    router.replace('/households');
+    router.replace('/settings');
   };
 
-  const since = (d?: string) => (d ? `Member since ${new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}` : 'Member');
+  const since = (d?: string) => (d ? `Joined ${new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}` : 'Member');
 
   return (
     <Screen>
@@ -95,23 +95,23 @@ export default function HouseholdScreen() {
           <Text style={{ fontSize: 26, fontWeight: '800', color: C.text, letterSpacing: -0.5 }} numberOfLines={2}>{group.emoji} {group.name}</Text>
           <Text style={[T.body, { color: C.sub }]}>{cur}</Text>
         </View>
-        {isAdmin && <IconButton icon="pencil" label="Rename household" size={44} onPress={() => setRename(true)} />}
+        {isAdmin && <IconButton icon="pencil" label="Rename space" size={44} onPress={() => setRename(true)} />}
       </View>
 
       <ScrollView contentContainerStyle={{ paddingHorizontal: S.xl, paddingBottom: 48, gap: S.xl }}>
         <View style={[s.row, { gap: S.md }]}>
           {isActive ? (
             <>
-              <Badge label="Active" tone="positive" />
-              <Text style={[T.body, { color: C.sub, flex: 1, fontSize: 14 }]}>Used by Home, Stats and new expenses.</Text>
+              <Badge label="Current" tone="primary" />
+              <Text style={[T.body, { color: C.sub, flex: 1, fontSize: 14 }]}>Overview, Activity and new expenses use this space.</Text>
             </>
           ) : (
-            <Button title="Make this the active household" icon="checkmark-circle-outline" variant="secondary" style={{ flex: 1 }}
-              onPress={() => { setActive(group.id); toast(`${group.name} is now active`, 'success'); }} />
+            <Button title="Make this my current space" icon="checkmark-circle-outline" variant="secondary" style={{ flex: 1 }}
+              onPress={() => { setActive(group.id); toast(`${group.name} is now your current space`, 'success'); }} />
           )}
         </View>
 
-        <Section title={`${members.length} member${members.length === 1 ? '' : 's'}`}>
+        <Section title={`People · ${members.length}`}>
           <Card style={{ padding: 0, overflow: 'hidden' }}>
             {members.map((m, i) => (
               <View key={m.user_id}>
@@ -155,29 +155,29 @@ export default function HouseholdScreen() {
               </View>
             ))}
             <Divider />
-            <ListRow icon="person-add-outline" tint={C.accent} title="Invite a member" subtitle="Share a code or send an email invite"
+            <ListRow icon="person-add-outline" tint={C.accent} title="Add people" subtitle="Share a code or send an email invite"
               onPress={() => setInvite(true)} />
           </Card>
         </Section>
 
-        <Section title="Manage">
+        <Section title="Space">
           <Card style={{ padding: 0, overflow: 'hidden' }}>
             <ListRow icon="flag-outline" tint={C.warn} title="Budget"
               subtitle={Number(group.monthly_budget) > 0 ? `${money(Number(group.monthly_budget), cur)} per month` : 'No monthly budget'}
               onPress={() => setBudget(true)} />
             <Divider />
-            <ListRow icon="swap-horizontal" tint={C.positive} title="Who owes who"
-              subtitle={unsettled === 0 ? 'Everyone is settled up' : Math.abs(myNet) < 0.005 ? "You're even · others aren't yet"
+            <ListRow icon="swap-horizontal" tint={C.positive} title="Balances"
+              subtitle={unsettled === 0 ? 'Everyone is even' : Math.abs(myNet) < 0.005 ? "You're even · others aren't yet"
                 : myNet > 0 ? `You're owed ${money(myNet, cur)}` : `You owe ${money(-myNet, cur)}`}
-              onPress={() => router.push({ pathname: '/balances', params: { g: group.id } })} />
+              onPress={() => { setActive(group.id); router.push('/balances'); }} />
             <Divider />
-            <ListRow icon="download-outline" tint="#3B82F6" title="Export" subtitle="All expenses as a CSV, for the lease, the bills, the taxes"
+            <ListRow icon="download-outline" tint="#3B82F6" title="Download CSV" subtitle="Every entry in this space, for your records"
               onPress={() => exportCsv(`${group.name}-expenses.csv`, expenses, cur, nameOf)} />
           </Card>
         </Section>
 
         <Section title="Danger zone">
-          <Button title={isOwner ? 'Delete household' : 'Leave household'} icon={isOwner ? 'trash-outline' : 'exit-outline'}
+          <Button title={isOwner ? 'Delete space' : 'Leave space'} icon={isOwner ? 'trash-outline' : 'exit-outline'}
             variant="danger" onPress={leaveOrDelete} />
         </Section>
       </ScrollView>
@@ -221,7 +221,7 @@ function InviteSheet({ visible, onClose, groupId, groupName, code, me, memberEma
   };
 
   return (
-    <Sheet visible={visible} onClose={() => { setMsg(null); setErr(null); onClose(); }} title="Invite a member">
+    <Sheet visible={visible} onClose={() => { setMsg(null); setErr(null); onClose(); }} title="Add people">
       <Press onPress={share} accessibilityLabel="Share invite code"
         style={[s.row, { padding: S.lg, borderRadius: R.lg, backgroundColor: C.primarySoft, gap: S.md }]}>
         <View style={{ flex: 1 }}>
@@ -242,7 +242,7 @@ function InviteSheet({ visible, onClose, groupId, groupName, code, me, memberEma
       <Field icon="mail-outline" placeholder="friend@email.com" autoCapitalize="none" keyboardType="email-address"
         value={email} error={err} onChangeText={(t) => { setEmail(t); setErr(null); }} onSubmitEditing={send} />
       <Button title="Send invite" icon="paper-plane-outline" loading={busy} onPress={send} />
-      <Text style={T.caption}>They'll see the invite on their Households tab when they sign in with that email.</Text>
+      <Text style={T.caption}>They'll find it under Settings › Waiting for you after signing in with that email.</Text>
     </Sheet>
   );
 }
@@ -262,7 +262,7 @@ function RenameSheet({ visible, onClose, groupId, initial, onSaved }: {
     onSaved(); onClose();
   };
   return (
-    <Sheet visible={visible} onClose={onClose} title="Rename household" footer={<Button title="Save" loading={busy} onPress={save} />}>
+    <Sheet visible={visible} onClose={onClose} title="Rename space" footer={<Button title="Save" loading={busy} onPress={save} />}>
       <Field defaultValue={initial} onChangeText={(t) => { setV(t); setErr(null); }} autoFocus error={err} onSubmitEditing={save} maxLength={40} />
     </Sheet>
   );

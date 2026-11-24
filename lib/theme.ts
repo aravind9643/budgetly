@@ -1,55 +1,55 @@
 import { Platform } from 'react-native';
 
 // Design tokens. Every screen pulls colors, spacing, radii and type from here.
-// Blue brand, flat colors only (no gradients), in a light and a dark palette.
+// Neutral greys with a single blue accent, flat colors only (no gradients), light and dark.
 const LIGHT = {
-  bg: '#F4F7FB',
+  bg: '#F7F7F8',
   surface: '#FFFFFF',
-  surface2: '#EDF2F8',
-  border: '#E1E8F0',
-  borderStrong: '#C8D3E0',
-  text: '#0F1B2D',
-  sub: '#4B5B70',
-  muted: '#64748B',   // 4.7:1 on white (WCAG AA for small text)
-  primary: '#1D4ED8',  // blue-700: hero cards, primary buttons, active tab
-  primarySoft: '#E3ECFD',
+  surface2: '#F1F2F4',
+  border: '#E6E7EB',
+  borderStrong: '#D0D3DA',
+  text: '#111318',
+  sub: '#4A4F5C',
+  muted: '#6B7180',    // 4.8:1 on white (WCAG AA)
+  primary: '#2456E6',  // the one accent: buttons, links, active states
+  primarySoft: '#E8EEFD',
   onPrimary: '#FFFFFF',
-  accent: '#2563EB',   // blue-600: + button, highlights
-  accentSoft: '#DBEAFE',
-  positive: '#15803D',
-  positiveSoft: '#DCFCE7',
-  negative: '#DC2626',
-  negativeSoft: '#FEE2E2',
-  warn: '#B45309',
-  warnSoft: '#FEF3C7',
-  scrim: 'rgba(15,27,45,0.45)',
-  shadow: '#0F1B2D',
-  shadowOpacity: 0.06,
+  accent: '#2456E6',
+  accentSoft: '#E8EEFD',
+  positive: '#13804A',
+  positiveSoft: '#E3F5EA',
+  negative: '#D12E2E',
+  negativeSoft: '#FCE9E9',
+  warn: '#A86206',
+  warnSoft: '#FCF1DE',
+  scrim: 'rgba(17,19,24,0.45)',
+  shadow: '#111318',
+  shadowOpacity: 0.08,
 };
 
 const DARK: typeof LIGHT = {
-  bg: '#0B1220',
-  surface: '#141D2F',
-  surface2: '#1C2740',
-  border: '#26334D',
-  borderStrong: '#36456A',
-  text: '#E8EEF8',
-  sub: '#A7B4C8',
-  muted: '#8C9AB0',    // 5.6:1 on surface
-  primary: '#3F6FF2',  // brighter blue so links/tabs stay legible on dark surfaces
-  primarySoft: 'rgba(79,125,255,0.18)',
-  onPrimary: '#FFFFFF',
-  accent: '#4F7DFF',
-  accentSoft: 'rgba(79,125,255,0.18)',
-  positive: '#4ADE80',
-  positiveSoft: 'rgba(74,222,128,0.14)',
-  negative: '#F87171',
-  negativeSoft: 'rgba(248,113,113,0.15)',
-  warn: '#FBBF24',
-  warnSoft: 'rgba(251,191,36,0.15)',
-  scrim: 'rgba(0,0,0,0.6)',
+  bg: '#0E1013',
+  surface: '#16191E',
+  surface2: '#1E2228',
+  border: '#272C34',
+  borderStrong: '#363C46',
+  text: '#ECEEF2',
+  sub: '#B0B6C2',
+  muted: '#8B92A0',    // 5.4:1 on surface
+  primary: '#5B8CFF',  // lifted for contrast on charcoal
+  primarySoft: 'rgba(91,140,255,0.16)',
+  onPrimary: '#0A1430', // dark text on the light-blue button: 7:1
+  accent: '#5B8CFF',
+  accentSoft: 'rgba(91,140,255,0.16)',
+  positive: '#4CC38A',
+  positiveSoft: 'rgba(76,195,138,0.14)',
+  negative: '#F2706B',
+  negativeSoft: 'rgba(242,112,107,0.14)',
+  warn: '#E9A23B',
+  warnSoft: 'rgba(233,162,59,0.14)',
+  scrim: 'rgba(0,0,0,0.62)',
   shadow: '#000000',
-  shadowOpacity: 0.35,
+  shadowOpacity: 0.4,
 };
 
 export type Scheme = 'light' | 'dark';

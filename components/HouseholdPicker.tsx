@@ -16,11 +16,11 @@ export function HouseholdPicker({ visible, onClose }: { visible: boolean; onClos
   const [join, setJoin] = useState(false);
   return (
     <>
-      <Sheet visible={visible && !join} onClose={onClose} title="My households"
+      <Sheet visible={visible && !join} onClose={onClose} title="Switch space"
         footer={
           <View style={{ gap: S.sm }}>
-            <Button title="Create household" icon="add" onPress={() => { onClose(); router.push('/new-group'); }} />
-            <Button title="I've been invited" icon="mail-open-outline" variant="secondary" onPress={() => setJoin(true)} />
+            <Button title="New space" icon="add" onPress={() => { onClose(); router.push('/new-group'); }} />
+            <Button title="Have a code?" icon="mail-open-outline" variant="secondary" onPress={() => setJoin(true)} />
           </View>
         }>
         {(households ?? []).map((h) => {
@@ -34,7 +34,7 @@ export function HouseholdPicker({ visible, onClose }: { visible: boolean; onClos
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={T.heading} numberOfLines={1}>{h.name}</Text>
-                <Text style={[T.body, { color: C.sub, fontSize: 14 }]}>{h.currency} · {h.memberCount} member{h.memberCount === 1 ? '' : 's'}</Text>
+                <Text style={[T.body, { color: C.sub, fontSize: 14 }]}>{h.memberCount} {h.memberCount === 1 ? 'person' : 'people'} · {h.currency}</Text>
               </View>
               {on && <Ionicons name="checkmark-circle" size={26} color={C.primary} />}
             </Press>
@@ -45,7 +45,7 @@ export function HouseholdPicker({ visible, onClose }: { visible: boolean; onClos
         onJoined={async (id) => {
           setJoin(false); onClose();
           await refreshHouseholds(); setActive(id);
-          toast('You joined the household', 'success');
+          toast('Joined. It is now your current space', 'success');
         }} />
     </>
   );

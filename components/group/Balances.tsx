@@ -34,16 +34,16 @@ export function Balances({ groupId, me, cur, net, transfers, settlements, nameOf
             color={Math.abs(mine) < 0.005 ? C.sub : mine > 0 ? C.positive : C.negative} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={T.label}>{Math.abs(mine) < 0.005 ? 'Your balance' : mine > 0 ? 'You are owed' : 'You owe'}</Text>
+          <Text style={T.label}>{Math.abs(mine) < 0.005 ? 'Your balance' : mine > 0 ? 'Owed to you' : 'You need to settle'}</Text>
           <Text style={[T.title, { fontVariant: ['tabular-nums'], color: Math.abs(mine) < 0.005 ? C.text : mine > 0 ? C.positive : C.negative }]}>
-            {Math.abs(mine) < 0.005 ? 'All settled' : money(Math.abs(mine), cur)}
+            {Math.abs(mine) < 0.005 ? 'Even' : money(Math.abs(mine), cur)}
           </Text>
         </View>
       </Card>
 
-      <Section title="To settle">
+      <Section title="Suggested payments">
         {transfers.length === 0 ? (
-          <Card><EmptyState emoji="🤝" title="Everyone's even" body="No one owes anything right now." /></Card>
+          <Card><EmptyState emoji="🤝" title="All even" body="Nobody needs to pay anyone right now." /></Card>
         ) : (
           <Card style={{ padding: 0, overflow: 'hidden' }}>
             {transfers.map((t, i) => {
@@ -59,7 +59,7 @@ export function Balances({ groupId, me, cur, net, transfers, settlements, nameOf
                     <View style={{ flex: 1 }}>
                       <Text style={T.body} numberOfLines={2}>
                         <Text style={{ fontWeight: '700' }}>{nameOf(t.from)}</Text>
-                        <Text style={{ color: C.sub }}>{t.from === me ? ' owe ' : ' owes '}</Text>
+                        <Text style={{ color: C.sub }}>{' → '}</Text>
                         <Text style={{ fontWeight: '700' }}>{nameOf(t.to)}</Text>
                       </Text>
                       <Text style={[T.heading, { color: t.to === me ? C.positive : t.from === me ? C.negative : C.text, fontVariant: ['tabular-nums'] }]}>
@@ -76,10 +76,10 @@ export function Balances({ groupId, me, cur, net, transfers, settlements, nameOf
             })}
           </Card>
         )}
-        <Text style={[T.caption, { paddingHorizontal: S.xs }]}>Simplified to the fewest repayments. Only the two people involved can record one.</Text>
+        <Text style={[T.caption, { paddingHorizontal: S.xs }]}>The fewest payments that make everyone even. Only the payer or the receiver can record one.</Text>
       </Section>
 
-      <Section title="Balances">
+      <Section title="Per person">
         <Card style={{ padding: 0, overflow: 'hidden' }}>
           {people.map(([u, v], i) => (
             <View key={u}>
@@ -98,7 +98,7 @@ export function Balances({ groupId, me, cur, net, transfers, settlements, nameOf
       </Section>
 
       {settlements.length > 0 && (
-        <Section title="Repayments">
+        <Section title="Payment history">
           <Card style={{ padding: 0, overflow: 'hidden' }}>
             {settlements.map((st, i) => (
               <Animated.View key={st.id} entering={FadeIn}>

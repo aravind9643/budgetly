@@ -2,7 +2,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { Activity } from '@/components/group/Activity';
-import { BackButton, MonthSwitcher, PageTitle } from '@/components/Nav';
+import { MonthSwitcher } from '@/components/Nav';
+import { SpaceHeader } from '@/components/SpaceHeader';
 import { Loading, Screen } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { useHousehold } from '@/lib/household';
@@ -10,8 +11,8 @@ import { Expense } from '@/lib/supabase';
 import { monthLabel, monthRange, S, sameMonth } from '@/lib/theme';
 import { displayName } from '@/lib/useGroup';
 
-/** All expenses of the active household for one month, grouped by day, with search and filters. */
-export default function Expenses() {
+/** Activity tab: all expenses of the active space for one month, grouped by day, with search and filters. */
+export default function ActivityTab() {
   const router = useRouter();
   const { m } = useLocalSearchParams<{ m?: string }>();
   const { session } = useAuth();
@@ -39,14 +40,14 @@ export default function Expenses() {
   };
 
   return (
-    <Screen>
-      <PageTitle left={<BackButton onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} />}
-        eyebrow={g?.name} title="Expenses" />
+    <Screen edges={['top']}>
+      <SpaceHeader title="Activity" />
+      <View style={{ height: S.md }} />
       <MonthSwitcher label={monthLabel(month)} nextDisabled={sameMonth(month, new Date())}
         onPrev={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}
         onNext={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} />
       {!g ? <Loading /> : (
-        <ScrollView contentContainerStyle={{ paddingHorizontal: S.xl, paddingBottom: 48 }} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={{ paddingHorizontal: S.xl, paddingBottom: 110 }} keyboardShouldPersistTaps="handled">
           <View>
             <Activity items={items} cur={g.currency} me={me} nameOf={nameOf} rowInfo={rowInfo}
               canEdit={(e) => e.user_id === me} onOpen={(e) => openAdd(e)} />

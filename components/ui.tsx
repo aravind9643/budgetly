@@ -122,8 +122,8 @@ export function IconButton({ icon, onPress, label, tone = 'default', size = 40 }
   return (
     <Press onPress={onPress} accessibilityLabel={label}
       style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' },
-        tone === 'default' && (shadow(C.shadow, C.shadowOpacity + 0.02, 12, 3) as any)]}>
-      <Ionicons name={icon} size={size * 0.5} color={tone === 'primary' ? C.onPrimary : C.text} />
+        tone === 'default' && { borderWidth: 1, borderColor: C.border }]}>
+      <Ionicons name={icon} size={size * 0.45} color={tone === 'primary' ? C.onPrimary : C.text} />
     </Press>
   );
 }
@@ -303,11 +303,9 @@ export const txt = (style: TextStyle, extra?: TextStyle) => [style, extra];
 // Plain objects with getters (not StyleSheet.create) so colors follow the active light/dark scheme.
 export const s = {
   row: { flexDirection: 'row', alignItems: 'center' } as ViewStyle,
+  // Flat surface: hairline border, no shadow. Reads the same in light and dark.
   get card(): ViewStyle {
-    return {
-      backgroundColor: C.surface, borderColor: scheme === 'dark' ? C.border : 'transparent', borderWidth: 1, borderRadius: 22, padding: S.lg,
-      ...(shadow(C.shadow, C.shadowOpacity, 18, 4) as any),
-    };
+    return { backgroundColor: C.surface, borderColor: C.border, borderWidth: 1, borderRadius: 18, padding: S.lg };
   },
   btn: {
     height: 50, borderRadius: R.md, alignItems: 'center', justifyContent: 'center', paddingHorizontal: S.xl,

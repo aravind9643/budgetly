@@ -5,7 +5,7 @@ import { useFeedback } from '@/lib/feedback';
 import { supabase } from '@/lib/supabase';
 import { C, T } from '@/lib/theme';
 
-/** Edit a household's shared monthly budget. Only owners and admins can save (enforced by RLS). */
+/** Edit a space's shared monthly budget. Only owners and admins can save (enforced by RLS). */
 export function BudgetSheet({ visible, onClose, groupId, initial, cur, canEdit, onSaved }: {
   visible: boolean; onClose: () => void; groupId: string; initial: number; cur: string; canEdit: boolean; onSaved: () => void;
 }) {
@@ -28,8 +28,8 @@ export function BudgetSheet({ visible, onClose, groupId, initial, cur, canEdit, 
       footer={canEdit ? <Button title="Save budget" loading={busy} onPress={save} /> : undefined}>
       <Text style={[T.body, { color: C.sub }]}>
         {canEdit
-          ? 'The shared spending limit for everyone in this household. Set it to 0 to turn the budget off.'
-          : 'Only the household owner or an admin can change the budget.'}
+          ? 'The shared spending limit for everyone in this space. Set it to 0 to turn the budget off.'
+          : 'Only the space owner or an admin can change the budget.'}
       </Text>
       <Field prefix={cur} keyboardType="decimal-pad" autoFocus={canEdit} placeholder="0" editable={canEdit}
         value={v} onChangeText={(t) => { setV(t.replace(/[^0-9.]/g, '')); setErr(null); }} error={err} onSubmitEditing={save} />

@@ -4,8 +4,9 @@ import { useMemo, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Donut } from '@/components/Donut';
-import { MonthSwitcher, PageTitle } from '@/components/Nav';
-import { Avatar, Card, EmptyState, IconButton, Loading, Press, ProgressBar, Screen, s } from '@/components/ui';
+import { MonthSwitcher } from '@/components/Nav';
+import { SpaceHeader } from '@/components/SpaceHeader';
+import { Avatar, Button, Card, EmptyState, IconButton, Loading, ProgressBar, Screen, s } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { exportCsv } from '@/lib/export';
 import { useHousehold } from '@/lib/household';
@@ -14,7 +15,7 @@ import { displayName } from '@/lib/useGroup';
 
 const monthStart = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
 
-export default function Stats() {
+export default function Insights() {
   const router = useRouter();
   const { session } = useAuth();
   const { data, households } = useHousehold();
@@ -65,8 +66,8 @@ export default function Stats() {
   if (!g) {
     return (
       <Screen edges={['top']}>
-        <PageTitle eyebrow="Analyze your expenses" title="Stats" />
-        <View style={{ padding: S.xl }}><Card><EmptyState emoji="📊" title="No household yet" body="Create or join a household to see stats." /></Card></View>
+        <SpaceHeader title="Insights" />
+        <View style={{ padding: S.xl }}><Card><EmptyState emoji="📊" title="No space yet" body="Start or join a space to see insights." /></Card></View>
       </Screen>
     );
   }
@@ -77,39 +78,36 @@ export default function Stats() {
   return (
     <Screen edges={['top']}>
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-        <PageTitle eyebrow="Analyze your expenses" title="Stats"
+        <SpaceHeader title="Insights"
           right={<IconButton icon="download-outline" label="Export CSV" size={48}
             onPress={() => exportCsv(`${g.name}-${monthRange(month).start.slice(0, 7)}.csv`, st.items, cur, nameOf)} />} />
+        <View style={{ height: S.md }} />
         <MonthSwitcher label={monthLabel(month)} nextDisabled={isCurrent}
           onPrev={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}
           onNext={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} />
 
         <View style={{ paddingHorizontal: S.xl, gap: S.lg }}>
-          {/* Spent hero */}
-          <Animated.View key={month.getTime()} entering={FadeIn.duration(250)}
-            style={{ backgroundColor: C.primary, borderRadius: 26, padding: S.xl, gap: S.md }}>
-            <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 16, fontWeight: '600' }}>
-              Spent in {month.toLocaleDateString(undefined, { month: 'long' })}
-            </Text>
-            <Text style={{ color: '#fff', fontSize: 40, fontWeight: '800', letterSpacing: -1, fontVariant: ['tabular-nums'] }} adjustsFontSizeToFit numberOfLines={1}>
-              {money(st.spent, cur)}
-            </Text>
-            {st.items.length > 0 && (
-              <Text style={{ color: '#C7D9FF', fontWeight: '600' }}>
-                ≈ {money(st.perDay, cur)} a day{st.estimate ? ` · month-end estimate ${money(st.estimate, cur)}` : ''}
+          {/* Spent summary: flat, typographic */}
+          <Animated.View key={month.getTime()} entering={FadeIn.duration(250)}>
+            <Card style={{ gap: S.md, padding: S.xl }}>
+              <Text style={T.label}>Spent in {month.toLocaleDateString(undefined, { month: 'long' })}</Text>
+              <Text style={{ color: C.text, fontSize: 38, fontWeight: '800', letterSpacing: -1, fontVariant: ['tabular-nums'] }} adjustsFontSizeToFit numberOfLines={1}>
+                {money(st.spent, cur)}
               </Text>
-            )}
-            {budget > 0 && (
-              <>
-                <ProgressBar value={pct} color="#FFFFFF" track="rgba(255,255,255,0.25)" height={10} semantic={false} />
-                <Text style={{ color: 'rgba(255,255,255,0.85)' }}>{Math.round(pct * 100)}% of the budget</Text>
-              </>
-            )}
-            <Press onPress={() => router.push({ pathname: '/expenses', params: { m: monthRange(month).start.slice(0, 7) } })}
-              style={[s.row, { gap: S.sm, justifyContent: 'center', height: 50, borderRadius: R.md, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.45)' }]}>
-              <Ionicons name="list" size={18} color="#fff" />
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>See all expenses</Text>
-            </Press>
+              {st.items.length > 0 && (
+                <Text style={[T.body, { color: C.sub }]}>
+                  ≈ {money(st.perDay, cur)} a day{st.estimate ? ` · on track for ${money(st.estimate, cur)}` : ''}
+                </Text>
+              )}
+              {budget > 0 && (
+                <View style={{ gap: 6 }}>
+                  <ProgressBar value={pct} height={8} />
+                  <Text style={T.caption}>{Math.round(pct * 100)}% of the {money(budget, cur)} budget</Text>
+                </View>
+              )}
+              <Button title="Open in Activity" icon="list" variant="secondary"
+                onPress={() => router.push({ pathname: '/activity', params: { m: monthRange(month).start.slice(0, 7) } })} />
+            </Card>
           </Animated.View>
 
           {insight && (
@@ -118,7 +116,7 @@ export default function Stats() {
                 <Ionicons name="bulb" size={26} color={C.accent} />
               </View>
               <View style={{ flex: 1, gap: 6 }}>
-                <Text style={{ color: C.primary, fontWeight: '800', letterSpacing: 0.8, fontSize: 13 }}>INSIGHT</Text>
+                <Text style={{ color: C.primary, fontWeight: '800', letterSpacing: 0.8, fontSize: 13 }}>WORTH KNOWING</Text>
                 <View style={{ backgroundColor: C.surface2, borderRadius: R.md, padding: S.md }}>
                   <Text style={[T.body, { fontSize: 16, lineHeight: 22 }]}>{insight}</Text>
                 </View>
@@ -126,9 +124,9 @@ export default function Stats() {
             </Card>
           )}
 
-          {/* Last 6 months */}
+          {/* Six-month trend */}
           <Card style={{ gap: S.lg }}>
-            <Text style={[T.heading, { fontSize: 20 }]}>Last 6 months</Text>
+            <Text style={[T.heading, { fontSize: 20 }]}>Six-month trend</Text>
             <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: S.sm, height: 150 }}>
               {st.six.map(({ m, total }) => {
                 const on = sameMonth(m, month);
@@ -150,14 +148,14 @@ export default function Stats() {
 
           {/* KPI tiles */}
           <View style={[s.row, { gap: S.sm, alignItems: 'stretch' }]}>
-            <Kpi label="Expenses" value={String(st.items.length)} caption="this month" />
+            <Kpi label="Entries" value={String(st.items.length)} caption="this month" />
             <Kpi label="Average" value={st.items.length ? money(st.spent / st.items.length, cur) : '—'} caption="per expense" />
-            <Kpi label="Biggest" value={st.biggest ? money(Number(st.biggest.amount), cur) : '—'} caption={st.biggest?.title ?? ' '} />
+            <Kpi label="Largest" value={st.biggest ? money(Number(st.biggest.amount), cur) : '—'} caption={st.biggest?.title ?? ' '} />
           </View>
 
           {/* By category */}
           <Card style={{ gap: S.lg }}>
-            <Text style={[T.heading, { fontSize: 20 }]}>By category</Text>
+            <Text style={[T.heading, { fontSize: 20 }]}>Where it went</Text>
             {st.byCat.length === 0 ? <EmptyState emoji="🍩" title="Nothing spent this month" /> : (
               <>
                 <View style={{ alignItems: 'center' }}>
@@ -185,7 +183,7 @@ export default function Stats() {
 
           {st.byPayer.length > 1 && (
             <Card style={{ gap: S.lg }}>
-              <Text style={[T.heading, { fontSize: 20 }]}>Who pays what</Text>
+              <Text style={[T.heading, { fontSize: 20 }]}>Paid by member</Text>
               {st.byPayer.map(([u, v]) => {
                 const total = st.byPayer.reduce((a, x) => a + x[1], 0) || 1;
                 return (

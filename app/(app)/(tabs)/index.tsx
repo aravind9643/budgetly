@@ -2,214 +2,170 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { BudgetSheet } from '@/components/BudgetSheet';
 import { TransactionRow } from '@/components/group/TransactionRow';
-import { HouseholdPicker } from '@/components/HouseholdPicker';
-import { ListRow, PageTitle } from '@/components/Nav';
-import { Button, Card, Divider, EmptyState, Press, ProgressBar, Screen, Skeleton, s } from '@/components/ui';
+import { SpaceHeader } from '@/components/SpaceHeader';
+import { Button, Card, Divider, EmptyState, Press, Screen, Skeleton, s } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { useHousehold } from '@/lib/household';
-import { Expense } from '@/lib/supabase';
-import { C, money, monthRange, parseYmd, R, S, T } from '@/lib/theme';
+import { C, catMeta, money, monthRange, R, S, T } from '@/lib/theme';
 import { displayName } from '@/lib/useGroup';
 
-function HomeSkeleton({ bare }: { bare?: boolean }) {
-  return (
-    <View style={{ padding: S.xl, paddingTop: bare ? 0 : S.xl, gap: S.lg }}>
-      {!bare && <View style={{ gap: 8, marginBottom: S.sm }}><Skeleton h={14} w={110} /><Skeleton h={30} w={160} /></View>}
-      <Skeleton h={190} r={26} />
-      <Skeleton h={84} r={22} />
-      <Skeleton h={130} r={22} />
-      <Skeleton h={24} w={180} />
-      <Skeleton h={64} r={22} />
-    </View>
-  );
-}
-
-const greeting = () => {
-  const h = new Date().getHours();
-  return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
-};
-
-export default function Home() {
+export default function Overview() {
   const router = useRouter();
   const { session } = useAuth();
-  const { households, activeId, data, net, refreshHouseholds, openAdd } = useHousehold();
-  const [picker, setPicker] = useState(false);
+  const { households, data, net, refreshHouseholds, openAdd } = useHousehold();
   const [budgetOpen, setBudgetOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const me = session?.user.id ?? '';
-  const name = (session?.user.user_metadata?.full_name as string) || session?.user.email?.split('@')[0] || '';
 
-  const header = (
-    <PageTitle eyebrow={greeting()} title={name}
-      right={households?.length ? (
-        <Press onPress={() => setPicker(true)} accessibilityLabel="Switch household"
-          style={[s.row, { gap: 6, backgroundColor: C.surface, borderRadius: R.pill, paddingLeft: 6, paddingRight: 12, height: 44, maxWidth: 200,
-            borderWidth: 1, borderColor: C.border }]}>
-          <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: C.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontSize: 16 }}>{data.group?.emoji ?? '🏠'}</Text>
-          </View>
-          <Text style={[T.body, { fontWeight: '700', flexShrink: 1 }]} numberOfLines={1}>{data.group?.name ?? '…'}</Text>
-          <Ionicons name="chevron-down" size={16} color={C.sub} />
-        </Press>
-      ) : undefined} />
-  );
-
-  if (households === null) return <Screen edges={['top']}><HomeSkeleton /></Screen>;
-
-  if (!households.length) {
+  if (households === null || (households.length && !data.group)) {
     return (
       <Screen edges={['top']}>
-        {header}
-        <View style={{ padding: S.xl }}>
-          <Card>
-            <EmptyState emoji="🏡" title="Set up your first household"
-              body="A household is one shared budget: your home, a flatshare, a trip. Create one or join with an invite code."
-              action={
-                <View style={{ gap: S.sm }}>
-                  <Button title="Create household" icon="add" onPress={() => router.push('/new-group')} />
-                  <Button title="I've been invited" variant="secondary" icon="mail-open-outline" onPress={() => setPicker(true)} />
-                </View>
-              } />
-          </Card>
-        </View>
-        <HouseholdPicker visible={picker} onClose={() => setPicker(false)} />
+        <SpaceHeader title="Overview" />
+        <View style={{ padding: S.xl, gap: S.lg }}><Skeleton h={200} r={18} /><Skeleton h={64} r={18} /><Skeleton h={240} r={18} /></View>
       </Screen>
     );
   }
 
-  const g = data.group;
-  const cur = g?.currency ?? 'USD';
+  if (!households.length) {
+    return (
+      <Screen edges={['top']}>
+        <SpaceHeader title="Welcome" />
+        <View style={{ padding: S.xl }}>
+          <Card>
+            <EmptyState emoji="✦" title="Start a shared space"
+              body="A space is one shared budget for a home, a trip or a flat. Start one, or join a space with a code someone sent you."
+              action={
+                <View style={{ gap: S.sm }}>
+                  <Button title="New space" icon="add" onPress={() => router.push('/new-group')} />
+                  <Button title="Settings & spaces" variant="secondary" icon="settings-outline" onPress={() => router.push('/settings')} />
+                </View>
+              } />
+          </Card>
+        </View>
+      </Screen>
+    );
+  }
+
+  const g = data.group!;
+  const cur = g.currency;
   const now = new Date();
   const { start, end } = monthRange(now);
-  const month = data.expenses.filter((e) => e.spent_at >= start && e.spent_at <= end);
-  const spent = month.filter((e) => e.type === 'expense').reduce((a, e) => a + Number(e.amount), 0);
-  const budget = Number(g?.monthly_budget ?? 0);
-  const left = budget - spent;
+  const monthItems = data.expenses.filter((e) => e.spent_at >= start && e.spent_at <= end && e.type === 'expense');
+  const spent = monthItems.reduce((a, e) => a + Number(e.amount), 0);
+  const budget = Number(g.monthly_budget ?? 0);
+  const available = budget - spent;
+  const over = budget > 0 && available < 0;
   const daysLeft = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate() + 1;
   const myNet = net[me] ?? 0;
-  const settled = Math.abs(myNet) < 0.005;
-  const myRole = data.members.find((m) => m.user_id === me)?.role;
-  const canEditBudget = g?.owner_id === me || myRole === 'admin';
+  const even = Math.abs(myNet) < 0.005;
+  const canEditBudget = g.owner_id === me || data.members.find((m) => m.user_id === me)?.role === 'admin';
   const nameOf = (u: string) => (u === me ? 'You' : displayName(data.members.find((m) => m.user_id === u)));
+  const monthName = now.toLocaleDateString(undefined, { month: 'long' });
 
-  // Recent: last 8, grouped by day.
-  const recent = data.expenses.slice(0, 8);
-  const days = [...recent.reduce((m, e) => m.set(e.spent_at, [...(m.get(e.spent_at) ?? []), e]), new Map<string, Expense[]>())];
+  // Composition bar: spending by category, then what's still available.
+  const byCat = Object.entries(monthItems.reduce<Record<string, number>>((a, e) => { a[e.category] = (a[e.category] ?? 0) + Number(e.amount); return a; }, {}))
+    .sort((a, b) => b[1] - a[1]);
+  const scale = Math.max(budget, spent) || 1;
+  const latest = data.expenses.slice(0, 5);
 
   return (
     <Screen edges={['top']}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}
+      <ScrollView contentContainerStyle={{ paddingBottom: 110 }}
         refreshControl={<RefreshControl tintColor={C.sub} refreshing={refreshing}
           onRefresh={async () => { setRefreshing(true); await Promise.all([refreshHouseholds(), data.reload()]); setRefreshing(false); }} />}>
-        {header}
-        {!g ? <HomeSkeleton bare /> : (
-          <View style={{ paddingHorizontal: S.xl, gap: S.lg }}>
-            {/* Budget hero */}
-            <Animated.View entering={FadeInDown.duration(350)}
-              style={{ backgroundColor: left < 0 && budget > 0 ? C.negative : C.primary, borderRadius: 26, padding: S.xl, gap: S.md }}>
+        <SpaceHeader title="Overview" />
+        <View style={{ paddingHorizontal: S.xl, paddingTop: S.lg, gap: S.lg }}>
+
+          {/* Available this month */}
+          <Animated.View entering={FadeIn.duration(300)}>
+            <Card style={{ padding: S.xl, gap: S.lg }}>
               <View style={[s.row, { justifyContent: 'space-between' }]}>
-                <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 16, fontWeight: '600' }}>
-                  {budget > 0 ? (left >= 0 ? 'Left this month' : 'Budget exceeded by') : 'Spent this month'}
-                </Text>
-                <View style={{ backgroundColor: 'rgba(255,255,255,0.16)', paddingHorizontal: 12, paddingVertical: 5, borderRadius: R.pill }}>
-                  <Text style={{ color: '#fff', fontWeight: '600' }}>{now.toLocaleDateString(undefined, { month: 'long' })}</Text>
+                <Text style={T.label}>{budget > 0 ? (over ? `Over budget · ${monthName}` : `Available · ${monthName}`) : `Spent · ${monthName}`}</Text>
+                <Press onPress={() => setBudgetOpen(true)} accessibilityLabel="Edit budget">
+                  <Text style={{ color: C.primary, fontWeight: '700', fontSize: 13 }}>{budget > 0 ? 'Edit budget' : 'Set budget'}</Text>
+                </Press>
+              </View>
+              <Text style={{ fontSize: 42, fontWeight: '800', letterSpacing: -1.2, color: over ? C.negative : C.text, fontVariant: ['tabular-nums'] }}
+                numberOfLines={1} adjustsFontSizeToFit>
+                {money(budget > 0 ? Math.abs(available) : spent, cur)}
+              </Text>
+
+              {budget > 0 && (
+                <View style={{ gap: S.sm }}>
+                  <View style={{ flexDirection: 'row', height: 12, borderRadius: 6, overflow: 'hidden', backgroundColor: C.surface2, gap: 2 }}>
+                    {byCat.map(([c, v]) => <View key={c} style={{ width: `${(v / scale) * 100}%`, backgroundColor: catMeta(c).color }} />)}
+                  </View>
+                  <View style={[s.row, { justifyContent: 'space-between' }]}>
+                    <Text style={T.caption}>{money(spent, cur)} spent</Text>
+                    <Text style={T.caption}>{money(budget, cur)} budget</Text>
+                  </View>
+                </View>
+              )}
+
+              <View style={[s.row, { gap: S.sm }]}>
+                <View style={[s.row, { gap: 6, flex: 1, padding: S.md, borderRadius: R.md, backgroundColor: C.surface2 }]}>
+                  <Ionicons name="today-outline" size={16} color={C.sub} />
+                  <Text style={[T.body, { fontSize: 14, color: C.sub }]} numberOfLines={1}>
+                    {budget > 0 && available > 0
+                      ? <><Text style={{ color: C.text, fontWeight: '700' }}>{money(available / daysLeft, cur)}</Text>/day</>
+                      : <Text style={{ color: C.text, fontWeight: '700' }}>{monthItems.length} expenses</Text>}
+                  </Text>
+                </View>
+                <View style={[s.row, { gap: 6, flex: 1, padding: S.md, borderRadius: R.md, backgroundColor: C.surface2 }]}>
+                  <Ionicons name="hourglass-outline" size={16} color={C.sub} />
+                  <Text style={[T.body, { fontSize: 14, color: C.sub }]} numberOfLines={1}>
+                    <Text style={{ color: C.text, fontWeight: '700' }}>{daysLeft}</Text> day{daysLeft === 1 ? '' : 's'} to go
+                  </Text>
                 </View>
               </View>
-              <Text style={{ color: '#fff', fontSize: 40, fontWeight: '800', letterSpacing: -1, fontVariant: ['tabular-nums'] }} adjustsFontSizeToFit numberOfLines={1}>
-                {money(budget > 0 ? Math.abs(left) : spent, cur)}
+            </Card>
+          </Animated.View>
+
+          {/* Your balance */}
+          <Card onPress={() => router.push('/balances')} style={[s.row, { gap: S.md, paddingVertical: S.md }]}>
+            <View style={{ width: 8, alignSelf: 'stretch', borderRadius: 4, backgroundColor: even ? C.border : myNet > 0 ? C.positive : C.negative }} />
+            <View style={{ flex: 1 }}>
+              <Text style={T.caption}>Your balance in {g.name}</Text>
+              <Text style={[T.heading, { fontVariant: ['tabular-nums'] }, !even && { color: myNet > 0 ? C.positive : C.negative }]}>
+                {even ? 'Even with everyone' : myNet > 0 ? `+${money(myNet, cur)} owed to you` : `${money(-myNet, cur)} to settle`}
               </Text>
-              {budget > 0 ? (
-                <>
-                  <ProgressBar value={spent / budget} color="#FFFFFF" track="rgba(255,255,255,0.25)" height={10} semantic={false} />
-                  <View style={[s.row, { justifyContent: 'space-between' }]}>
-                    <Text style={{ color: 'rgba(255,255,255,0.85)' }}>{money(spent, cur)} spent</Text>
-                    <Text style={{ color: 'rgba(255,255,255,0.85)' }}>of {money(budget, cur)}</Text>
-                  </View>
-                  {/* The number people act on: what they can still spend per day. */}
-                  <View style={[s.row, { gap: S.sm, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: R.md, padding: S.md }]}>
-                    <Ionicons name={left >= 0 ? 'calendar-outline' : 'alert-circle-outline'} size={18} color="#fff" />
-                    <Text style={{ color: '#fff', flex: 1, fontWeight: '600' }}>
-                      {left >= 0
-                        ? <>{money(left / daysLeft, cur)}/day for the {daysLeft} day{daysLeft === 1 ? '' : 's'} left</>
-                        : <>Over by {money(-left, cur)}. Pause non-essentials for {daysLeft} day{daysLeft === 1 ? '' : 's'}</>}
-                    </Text>
-                  </View>
-                </>
-              ) : (
-                <Press onPress={() => setBudgetOpen(true)}>
-                  <Text style={{ color: '#fff', fontWeight: '700', textDecorationLine: 'underline' }}>Set a monthly budget</Text>
-                </Press>
-              )}
-            </Animated.View>
+            </View>
+            <View style={{ paddingHorizontal: 12, height: 32, borderRadius: R.pill, justifyContent: 'center', backgroundColor: C.surface2 }}>
+              <Text style={{ fontWeight: '700', color: C.text, fontSize: 13 }}>{even ? 'Details' : myNet < 0 ? 'Settle' : 'Details'}</Text>
+            </View>
+          </Card>
 
-            {/* Who owes who */}
-            <Card onPress={() => router.push('/balances')} style={[s.row, { gap: S.md, paddingVertical: S.lg }]}>
-              <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: C.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
-                <Ionicons name="swap-horizontal" size={22} color={C.accent} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[T.body, { color: C.sub, fontSize: 14 }]}>Who owes who</Text>
-                <Text style={[T.heading, { fontSize: 18 }, !settled && { color: myNet > 0 ? C.positive : C.negative }]}>
-                  {settled ? "You're all square 🎉" : myNet > 0 ? `You're owed ${money(myNet, cur)}` : `You owe ${money(-myNet, cur)}`}
-                </Text>
-              </View>
-              {settled
-                ? <Ionicons name="checkmark-circle" size={26} color={C.positive} />
-                : (
-                  <View style={{ backgroundColor: myNet < 0 ? C.primary : C.primarySoft, borderRadius: R.pill, paddingHorizontal: 14, height: 36, justifyContent: 'center' }}>
-                    <Text style={{ color: myNet < 0 ? '#fff' : C.primary, fontWeight: '700' }}>{myNet < 0 ? 'Settle up' : 'View'}</Text>
-                  </View>
-                )}
-            </Card>
-
-            <Card style={{ padding: 0, overflow: 'hidden' }}>
-              <ListRow icon="wallet-outline" tint={C.positive} title="Budget"
-                subtitle={budget > 0 ? `${money(budget, cur)} per month` : 'Not set'} onPress={() => setBudgetOpen(true)} />
-              <Divider />
-              <ListRow icon="settings-outline" tint="#7C5CD6" title="Household settings"
-                subtitle={`${data.members.length} member${data.members.length === 1 ? '' : 's'} · invite, roles`}
-                onPress={() => router.push(`/group/${activeId}`)} />
-            </Card>
-
-            {/* Recent expenses */}
-            <View style={[s.row, { justifyContent: 'space-between', marginTop: S.md }]}>
-              <Text style={{ fontSize: 24, fontWeight: '800', color: C.text, letterSpacing: -0.5 }}>Recent expenses</Text>
-              {recent.length > 0 && (
-                <Press onPress={() => router.push('/expenses')} style={[s.row, { gap: 2 }]}>
-                  <Text style={{ color: C.primary, fontWeight: '700' }}>See all expenses</Text>
-                  <Ionicons name="chevron-forward" size={16} color={C.primary} />
-                </Press>
+          {/* Latest */}
+          <View style={{ gap: S.sm, marginTop: S.sm }}>
+            <View style={[s.row, { justifyContent: 'space-between' }]}>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: C.text }}>Latest</Text>
+              {latest.length > 0 && (
+                <Press onPress={() => router.push('/activity')}><Text style={{ color: C.primary, fontWeight: '700' }}>All activity</Text></Press>
               )}
             </View>
-            {recent.length === 0 ? (
-              <Card><EmptyState emoji="🧾" title="No expenses yet" body="Tap + to add the first one."
-                action={<Button title="Add expense" icon="add" onPress={() => openAdd(null)} />} /></Card>
-            ) : days.map(([day, list]) => (
-              <View key={day} style={{ gap: S.sm }}>
-                <Text style={[T.label, { textTransform: 'uppercase', letterSpacing: 0.8, paddingHorizontal: S.xs }]}>
-                  {parseYmd(day).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}
-                </Text>
-                <Card style={{ padding: 0, overflow: 'hidden' }}>
-                  {list.map((e, i) => (
-                    <View key={e.id}>
-                      {i > 0 && <Divider />}
-                      <TransactionRow e={e} cur={cur} who={nameOf(e.paid_by ?? e.user_id)}
-                        splitCount={e.type === 'expense' && !e.is_personal ? data.splits.filter((x) => x.expense_id === e.id).length : 0}
-                        onPress={e.user_id === me ? () => openAdd(e) : undefined} />
-                    </View>
-                  ))}
-                </Card>
-              </View>
-            ))}
+            {latest.length === 0 ? (
+              <Card><EmptyState emoji="🧾" title="Nothing logged yet" body={`Expenses you and others add to ${g.name} appear here.`}
+                action={<Button title="New expense" icon="add" onPress={() => openAdd(null)} />} /></Card>
+            ) : (
+              <Card style={{ padding: 0, overflow: 'hidden' }}>
+                {latest.map((e, i) => (
+                  <View key={e.id}>
+                    {i > 0 && <Divider />}
+                    <TransactionRow e={e} cur={cur} who={nameOf(e.paid_by ?? e.user_id)} showDate
+                      splitCount={e.type === 'expense' && !e.is_personal ? data.splits.filter((x) => x.expense_id === e.id).length : 0}
+                      onPress={e.user_id === me ? () => openAdd(e) : undefined} />
+                  </View>
+                ))}
+              </Card>
+            )}
           </View>
-        )}
+        </View>
       </ScrollView>
-      <HouseholdPicker visible={picker} onClose={() => setPicker(false)} />
-      {g && <BudgetSheet visible={budgetOpen} onClose={() => setBudgetOpen(false)} groupId={g.id} initial={budget} cur={cur}
-        canEdit={canEditBudget} onSaved={() => { data.reload(); refreshHouseholds(); }} />}
+      <BudgetSheet visible={budgetOpen} onClose={() => setBudgetOpen(false)} groupId={g.id} initial={budget} cur={cur}
+        canEdit={canEditBudget} onSaved={() => { data.reload(); refreshHouseholds(); }} />
     </Screen>
   );
 }

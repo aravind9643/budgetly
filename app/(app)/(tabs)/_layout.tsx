@@ -12,43 +12,47 @@ import { C, shadow } from '@/lib/theme';
 import { displayName } from '@/lib/useGroup';
 
 const TABS: Record<string, { label: string; icon: any; iconActive: any }> = {
-  index: { label: 'Home', icon: 'home-outline', iconActive: 'home' },
-  stats: { label: 'Stats', icon: 'bar-chart-outline', iconActive: 'bar-chart' },
-  households: { label: 'Households', icon: 'people-outline', iconActive: 'people' },
-  profile: { label: 'Profile', icon: 'person-outline', iconActive: 'person' },
+  index: { label: 'Overview', icon: 'grid-outline', iconActive: 'grid' },
+  activity: { label: 'Activity', icon: 'receipt-outline', iconActive: 'receipt' },
+  insights: { label: 'Insights', icon: 'pie-chart-outline', iconActive: 'pie-chart' },
+  balances: { label: 'Balances', icon: 'scale-outline', iconActive: 'scale' },
 };
+const WITH_FAB = new Set(['index', 'activity']);
 
 function TabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { openAdd, activeId } = useHousehold();
   const { toast } = useFeedback();
-  const items = state.routes.map((r, i) => {
-    const t = TABS[r.name]; const focused = state.index === i;
-    if (!t) return null;
-    return (
-      <Pressable key={r.key} accessibilityRole="tab" accessibilityState={{ selected: focused }} accessibilityLabel={t.label}
-        onPress={() => { tap(); if (!focused) navigation.navigate(r.name); }}
-        style={{ flex: 1, alignItems: 'center', paddingTop: 10, gap: 3 }}>
-        {focused && <View style={{ position: 'absolute', top: 0, width: 34, height: 3, borderRadius: 2, backgroundColor: C.accent }} />}
-        <Ionicons name={focused ? t.iconActive : t.icon} size={24} color={focused ? C.primary : C.sub} />
-        <Text style={{ fontSize: 12, fontWeight: focused ? '700' : '500', color: focused ? C.primary : C.sub }}>{t.label}</Text>
-      </Pressable>
-    );
-  });
-  const fab = (
-    <View key="fab" style={{ width: 84, alignItems: 'center' }}>
-      <Press onPress={() => (activeId ? openAdd(null) : toast('Create or join a household first'))} accessibilityLabel="Add expense"
-        style={[{ width: 64, height: 64, borderRadius: 32, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center',
-          marginTop: -26, borderWidth: 5, borderColor: C.surface }, shadow(C.accent, 0.35, 14, 6) as any]}>
-        <Ionicons name="add" size={32} color="#fff" />
-      </Press>
-    </View>
-  );
+  const current = state.routes[state.index]?.name;
   return (
-    <View style={[{ flexDirection: 'row', backgroundColor: C.surface, borderTopWidth: 1, borderTopColor: C.border,
-      paddingBottom: Math.max(insets.bottom, 10) }, shadow(C.shadow, C.shadowOpacity, 16, -4) as any]}>
-      <View style={{ flexDirection: 'row', flex: 1, maxWidth: 680, alignSelf: 'center', marginHorizontal: 'auto' as any }}>
-        {items[0]}{items[1]}{fab}{items[2]}{items[3]}
+    <View>
+      {/* Extended floating action button: the primary task, labelled, above the bar. */}
+      {WITH_FAB.has(current) && (
+        <View style={{ position: 'absolute', right: 20, top: -72, zIndex: 10 }}>
+          <Press onPress={() => (activeId ? openAdd(null) : toast('Create or join a space first'))} accessibilityLabel="New expense"
+            style={[{ flexDirection: 'row', alignItems: 'center', gap: 8, height: 54, paddingHorizontal: 20, borderRadius: 18,
+              backgroundColor: C.primary }, shadow(C.shadow, C.shadowOpacity + 0.1, 18, 6) as any]}>
+            <Ionicons name="add" size={22} color={C.onPrimary} />
+            <Text style={{ color: C.onPrimary, fontWeight: '700', fontSize: 15 }}>New expense</Text>
+          </Press>
+        </View>
+      )}
+      <View style={{ flexDirection: 'row', backgroundColor: C.surface, borderTopWidth: 1, borderTopColor: C.border,
+        paddingBottom: Math.max(insets.bottom, 8), paddingTop: 6 }}>
+        <View style={{ flexDirection: 'row', flex: 1, maxWidth: 560, alignSelf: 'center', marginHorizontal: 'auto' as any }}>
+          {state.routes.map((r, i) => {
+            const t = TABS[r.name]; const focused = state.index === i;
+            if (!t) return null;
+            return (
+              <Pressable key={r.key} accessibilityRole="tab" accessibilityState={{ selected: focused }} accessibilityLabel={t.label}
+                onPress={() => { tap(); if (!focused) navigation.navigate(r.name); }}
+                style={{ flex: 1, alignItems: 'center', gap: 3, paddingVertical: 4 }}>
+                <Ionicons name={focused ? t.iconActive : t.icon} size={22} color={focused ? C.primary : C.muted} />
+                <Text style={{ fontSize: 11, fontWeight: focused ? '700' : '500', color: focused ? C.primary : C.muted }}>{t.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
     </View>
   );
@@ -64,9 +68,9 @@ export default function TabsLayout() {
     <>
       <Tabs tabBar={(p) => <TabBar {...p} />} screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: C.bg } } as any}>
         <Tabs.Screen name="index" />
-        <Tabs.Screen name="stats" />
-        <Tabs.Screen name="households" />
-        <Tabs.Screen name="profile" />
+        <Tabs.Screen name="activity" />
+        <Tabs.Screen name="insights" />
+        <Tabs.Screen name="balances" />
       </Tabs>
       {activeId && data.group && (
         <TransactionSheet visible={sheet.open} editing={sheet.editing} onClose={closeSheet} groupId={activeId}

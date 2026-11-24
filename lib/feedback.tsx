@@ -65,7 +65,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
                 </Pressable>
                 <Pressable onPress={() => close(true)}
                   style={[styles.dBtn, { backgroundColor: dialog.destructive ? C.negative : C.primary }]}>
-                  <Text style={{ color: '#fff', fontWeight: '700' }}>{dialog.confirmLabel ?? 'Confirm'}</Text>
+                  <Text style={{ color: dialog.destructive ? '#fff' : C.onPrimary, fontWeight: '700' }}>{dialog.confirmLabel ?? 'Confirm'}</Text>
                 </Pressable>
               </View>
             </Animated.View>
