@@ -1,11 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { Image, Pressable, View } from 'react-native';
+import { Text, TextInput } from '@/components/Typography';
 import { Avatar, Button, Field, IconButton, Press, Segmented, Sheet, s, tap } from '@/components/ui';
 import { splitCents } from '@/lib/balances';
 import { useFeedback } from '@/lib/feedback';
 import { Expense, Split, SplitType, supabase } from '@/lib/supabase';
-import { C, CATEGORIES, dayLabel, money, parseYmd, R, S, T, ymd } from '@/lib/theme';
+import { allCategories, C, dayLabel, money, parseYmd, R, S, T, ymd } from '@/lib/theme';
 
 type Kind = 'expense' | 'income';
 export type Person = { id: string; name: string };
@@ -28,13 +30,19 @@ export function TransactionSheet({ visible, onClose, groupId, me, cur, editing, 
   const [weights, setWeights] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<{ amount?: string; title?: string; form?: string }>({});
-  const [confirmDel, setConfirmDel] = useState(false);
+  // Receipt: a newly picked local image, the signed URL of an existing one, or a pending removal.
+  const [receiptUri, setReceiptUri] = useState<string | null>(null);
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [removeReceipt, setRemoveReceipt] = useState(false);
   // Progressive disclosure: most expenses are "paid by me, split equally with everyone".
   const [splitOpen, setSplitOpen] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
-    setErr({}); setConfirmDel(false);
+    setErr({}); setReceiptUri(null); setReceiptUrl(null); setRemoveReceipt(false);
+    if (editing?.receipt_path) {
+      supabase.storage.from('receipts').createSignedUrl(editing.receipt_path, 3600).then(({ data }) => setReceiptUrl(data?.signedUrl ?? null));
+    }
     setSplitOpen(!!editing && ((editing.split_type ?? 'equal') !== 'equal' || editing.paid_by !== me
       || (editingSplits.length > 0 && editingSplits.length !== people.length)));
     const all = Object.fromEntries(people.map((p) => [p.id, true]));
@@ -108,7 +116,7 @@ export function TransactionSheet({ visible, onClose, groupId, me, cur, editing, 
     setErr(e);
     if (Object.keys(e).length) return;
     setBusy(true);
-    const { error } = await supabase.rpc('save_expense', {
+    const { data: savedId, error } = await supabase.rpc('save_expense', {
       p_id: editing?.id ?? null, p_group: groupId, p_title: title.trim(), p_amount: total,
       p_category: type === 'income' ? 'other' : category, p_type: type, p_spent_at: date,
       p_paid_by: type === 'income' || personal ? me : paidBy, p_personal: type === 'expense' && personal,
@@ -117,23 +125,63 @@ export function TransactionSheet({ visible, onClose, groupId, me, cur, editing, 
         ? parts.map((x) => ({ user_id: x.user_id, amount: x.c / 100, weight: mode === 'equal' || mode === 'exact' ? null : Number(weights[x.user_id]) || 0 }))
         : [],
     } as any);
-    setBusy(false);
     // Shown inline, because a toast would render underneath this modal on web.
-    if (error) return setErr({ form: error.message });
-    toast(editing ? 'Transaction updated' : `${type === 'income' ? 'Income' : 'Expense'} added`, 'success');
+    if (error) { setBusy(false); return setErr({ form: error.message }); }
+    const receiptError = await syncReceipt(String(savedId));
+    setBusy(false);
+    if (receiptError) toast(`Saved, but the receipt did not upload: ${receiptError}`, 'error');
+    else toast(editing ? 'Transaction updated' : `${type === 'income' ? 'Income' : 'Expense'} added`, 'success');
     onSaved(); onClose();
   };
 
+  // Upload a newly picked receipt to receipts/<space>/<expense>.jpg, or clear a removed one.
+  const syncReceipt = async (expenseId: string): Promise<string | null> => {
+    try {
+      if (receiptUri) {
+        const body = await (await fetch(receiptUri)).arrayBuffer();
+        const path = `${groupId}/${expenseId}.jpg`;
+        const up = await supabase.storage.from('receipts').upload(path, body, { contentType: 'image/jpeg', upsert: true });
+        if (up.error) return up.error.message;
+        const { error } = await supabase.from('expenses').update({ receipt_path: path }).eq('id', expenseId);
+        return error?.message ?? null;
+      }
+      if (removeReceipt && editing?.receipt_path) {
+        await supabase.storage.from('receipts').remove([editing.receipt_path]);
+        const { error } = await supabase.from('expenses').update({ receipt_path: null }).eq('id', expenseId);
+        return error?.message ?? null;
+      }
+    } catch (e: any) { return e?.message ?? 'upload failed'; }
+    return null;
+  };
+
+  const pickReceipt = async () => {
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.6 });
+    if (!res.canceled && res.assets[0]) { setReceiptUri(res.assets[0].uri); setRemoveReceipt(false); }
+  };
+
+  // Delete immediately and offer Undo (faster than an "are you sure?" step; nothing is lost).
   const remove = async () => {
     if (!editing) return;
-    // Two-step inline confirm: a second modal can't be stacked on top of this sheet.
-    if (!confirmDel) return setConfirmDel(true);
+    const snapshot = { ...editing };
+    const snapSplits = editingSplits.map((x) => ({ user_id: x.user_id, amount: Number(x.amount), weight: x.weight }));
     setBusy(true);
     const { error } = await supabase.from('expenses').delete().eq('id', editing.id);
     setBusy(false);
     if (error) return setErr({ form: error.message });
-    toast('Transaction deleted', 'success');
     onSaved(); onClose();
+    toast(`"${snapshot.title}" deleted`, 'info', {
+      label: 'Undo',
+      onPress: async () => {
+        const { data: id, error: e } = await supabase.rpc('save_expense', {
+          p_id: null, p_group: groupId, p_title: snapshot.title, p_amount: Number(snapshot.amount), p_category: snapshot.category,
+          p_type: snapshot.type, p_spent_at: snapshot.spent_at, p_paid_by: snapshot.paid_by, p_personal: snapshot.is_personal,
+          p_split_type: snapshot.split_type, p_splits: snapSplits,
+        } as any);
+        if (e) return toast(`Could not restore: ${e.message}`, 'error');
+        if (snapshot.receipt_path) await supabase.from('expenses').update({ receipt_path: snapshot.receipt_path }).eq('id', String(id));
+        toast('Restored', 'success'); onSaved();
+      },
+    });
   };
 
   const tone = type === 'expense' ? C.negative : C.positive;
@@ -151,20 +199,8 @@ export function TransactionSheet({ visible, onClose, groupId, me, cur, editing, 
               <Text style={{ color: C.negative, flex: 1 }}>{err.form}</Text>
             </View>
           )}
-          {confirmDel ? (
-            <>
-              <Text style={[T.body, { color: C.sub, textAlign: 'center' }]}>Delete "{editing?.title}" for everyone?</Text>
-              <View style={[s.row, { gap: S.sm }]}>
-                <Button title="Cancel" variant="secondary" onPress={() => setConfirmDel(false)} style={{ flex: 1 }} />
-                <Button title="Delete" variant="danger" icon="trash-outline" loading={busy} onPress={remove} style={{ flex: 1 }} />
-              </View>
-            </>
-          ) : (
-            <>
-              <Button title={editing ? 'Save changes' : `Add ${type}`} loading={busy} onPress={save} />
-              {editing && <Button title="Delete" variant="ghost" icon="trash-outline" onPress={remove} />}
-            </>
-          )}
+          <Button title={editing ? 'Save changes' : `Add ${type}`} loading={busy} onPress={save} />
+          {editing && <Button title="Delete" variant="ghost" icon="trash-outline" onPress={remove} />}
         </View>
       }>
       <Segmented<Kind> value={type} onChange={setType} tones={{ expense: C.negative, income: C.positive }}
@@ -181,6 +217,15 @@ export function TransactionSheet({ visible, onClose, groupId, me, cur, editing, 
             style={{ color: tone, fontSize: 44, fontWeight: '800', width: Math.max(120, (amount.length || 4) * 28), textAlign: 'center', letterSpacing: -1, outlineStyle: 'none' } as any} />
         </View>
         {err.amount && <Text style={{ color: C.negative, fontSize: 12 }}>{err.amount}</Text>}
+        {/* Quick add: tap to add to the amount (fast for round numbers) */}
+        <View style={[s.row, { gap: S.sm, marginTop: 4 }]}>
+          {[5, 10, 20, 50, 100].map((v) => (
+            <Pressable key={v} accessibilityLabel={`Add ${v}`} onPress={() => { tap(); setAmount(String(+((Number(amount) || 0) + v).toFixed(2))); setErr((x) => ({ ...x, amount: undefined })); }}
+              style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: R.pill, backgroundColor: C.surface2, borderWidth: 1, borderColor: C.border }}>
+              <Text style={{ color: C.sub, fontWeight: '700', fontSize: 13 }}>+{v}</Text>
+            </Pressable>
+          ))}
+        </View>
       </View>
 
       <Field label="Description" placeholder={type === 'expense' ? 'e.g. Weekly groceries' : 'e.g. Salary'} value={title}
@@ -191,7 +236,7 @@ export function TransactionSheet({ visible, onClose, groupId, me, cur, editing, 
         <View style={{ gap: 6 }}>
           <Text style={T.label}>Category</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: S.sm }}>
-            {Object.entries(CATEGORIES).map(([k, v]) => {
+            {allCategories().map(([k, v]) => {
               const active = category === k;
               return (
                 <Press key={k} onPress={() => setCategory(k)} accessibilityLabel={v.label}
@@ -199,7 +244,7 @@ export function TransactionSheet({ visible, onClose, groupId, me, cur, editing, 
                     flexBasis: '22%', flexGrow: 1, paddingVertical: S.sm, borderRadius: R.md, alignItems: 'center', gap: 4,
                     backgroundColor: active ? v.color + '22' : C.surface2, borderWidth: 1.5, borderColor: active ? v.color : 'transparent',
                   }}>
-                  <Ionicons name={v.icon} size={20} color={active ? v.color : C.sub} />
+                  {v.emoji ? <Text style={{ fontSize: 19 }}>{v.emoji}</Text> : <Ionicons name={v.icon} size={20} color={active ? v.color : C.sub} />}
                   <Text style={{ color: active ? C.text : C.sub, fontSize: 11, fontWeight: '600' }}>{v.label}</Text>
                 </Press>
               );
@@ -295,6 +340,30 @@ export function TransactionSheet({ visible, onClose, groupId, me, cur, editing, 
             </>
           )}
         </>
+      )}
+
+      {type === 'expense' && (
+        <View style={{ gap: 6 }}>
+          <Text style={T.label}>Receipt</Text>
+          {(receiptUri || (receiptUrl && !removeReceipt)) ? (
+            <View style={[s.row, { gap: S.md, padding: S.sm, borderRadius: R.md, backgroundColor: C.surface2, borderWidth: 1, borderColor: C.border }]}>
+              <Image source={{ uri: receiptUri ?? receiptUrl! }} style={{ width: 56, height: 56, borderRadius: 10, backgroundColor: C.border }} accessibilityLabel="Receipt photo" />
+              <Text style={[T.body, { flex: 1, color: C.sub }]}>{receiptUri ? 'New photo attached' : 'Receipt attached'}</Text>
+              <Pressable hitSlop={8} onPress={pickReceipt} accessibilityLabel="Replace receipt" style={{ padding: 6 }}>
+                <Text style={{ color: C.primary, fontWeight: '700' }}>Replace</Text>
+              </Pressable>
+              <Pressable hitSlop={8} onPress={() => { setReceiptUri(null); setRemoveReceipt(true); }} accessibilityLabel="Remove receipt" style={{ padding: 6 }}>
+                <Ionicons name="close-circle" size={22} color={C.muted} />
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable onPress={pickReceipt} accessibilityRole="button" accessibilityLabel="Attach a receipt photo"
+              style={[s.row, { gap: S.sm, padding: S.md, borderRadius: R.md, borderWidth: 1, borderStyle: 'dashed', borderColor: C.borderStrong }]}>
+              <Ionicons name="camera-outline" size={20} color={C.primary} />
+              <Text style={{ color: C.primary, fontWeight: '700' }}>Attach a photo</Text>
+            </Pressable>
+          )}
+        </View>
       )}
 
       <View style={{ gap: 6 }}>

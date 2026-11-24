@@ -1,21 +1,25 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { RefreshControl, ScrollView, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, View } from 'react-native';
+import { Text } from '@/components/Typography';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { BudgetSheet } from '@/components/BudgetSheet';
 import { TransactionRow } from '@/components/group/TransactionRow';
+import { Onboarding } from '@/components/Onboarding';
 import { SpaceHeader } from '@/components/SpaceHeader';
-import { Button, Card, Divider, EmptyState, Press, Screen, Skeleton, s } from '@/components/ui';
+import { Button, Card, Divider, EmptyState, Press, ProgressBar, Screen, Skeleton, s } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { useHousehold } from '@/lib/household';
 import { C, catMeta, money, monthRange, R, S, T } from '@/lib/theme';
 import { displayName } from '@/lib/useGroup';
+import { useThemeMode } from '@/lib/themeMode';
 
 export default function Overview() {
+  useThemeMode(); // re-render this screen when light/dark changes
   const router = useRouter();
   const { session } = useAuth();
-  const { households, data, net, refreshHouseholds, openAdd } = useHousehold();
+  const { households, data, net, alerts, refreshHouseholds, openAdd } = useHousehold();
   const [budgetOpen, setBudgetOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const me = session?.user.id ?? '';
@@ -30,23 +34,7 @@ export default function Overview() {
   }
 
   if (!households.length) {
-    return (
-      <Screen edges={['top']}>
-        <SpaceHeader title="Welcome" />
-        <View style={{ padding: S.xl }}>
-          <Card>
-            <EmptyState emoji="✦" title="Start a shared space"
-              body="A space is one shared budget for a home, a trip or a flat. Start one, or join a space with a code someone sent you."
-              action={
-                <View style={{ gap: S.sm }}>
-                  <Button title="New space" icon="add" onPress={() => router.push('/new-group')} />
-                  <Button title="Settings & spaces" variant="secondary" icon="settings-outline" onPress={() => router.push('/settings')} />
-                </View>
-              } />
-          </Card>
-        </View>
-      </Screen>
-    );
+    return <Screen edges={['top']}><Onboarding /></Screen>;
   }
 
   const g = data.group!;
@@ -123,6 +111,28 @@ export default function Overview() {
               </View>
             </Card>
           </Animated.View>
+
+          {/* Category limits that need attention (the overall budget is already shown above) */}
+          {alerts.filter((a) => a.key !== '__overall').length > 0 && (
+            <Card onPress={() => router.push('/budgets')} style={{ gap: S.md }}>
+              <View style={[s.row, { gap: S.sm }]}>
+                <Ionicons name="alert-circle-outline" size={18} color={C.warn} />
+                <Text style={[T.heading, { flex: 1 }]}>Watch these</Text>
+                <Ionicons name="chevron-forward" size={16} color={C.muted} />
+              </View>
+              {alerts.filter((a) => a.key !== '__overall').slice(0, 3).map((a) => (
+                <View key={a.key} style={{ gap: 4 }}>
+                  <View style={[s.row, { justifyContent: 'space-between' }]}>
+                    <Text style={[T.body, { fontWeight: '600' }]}>{catMeta(a.key).emoji ? `${catMeta(a.key).emoji} ` : ''}{a.label}</Text>
+                    <Text style={[T.caption, { color: a.level >= 100 ? C.negative : C.warn, fontWeight: '700' }]}>
+                      {money(a.spent, cur)} / {money(a.limit, cur)}
+                    </Text>
+                  </View>
+                  <ProgressBar value={a.pct} height={6} />
+                </View>
+              ))}
+            </Card>
+          )}
 
           {/* Your balance */}
           <Card onPress={() => router.push('/balances')} style={[s.row, { gap: S.md, paddingVertical: S.md }]}>

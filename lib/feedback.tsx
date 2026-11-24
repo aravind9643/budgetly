@@ -1,16 +1,20 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { createContext, ReactNode, useCallback, useContext, useRef, useState } from 'react';
-import { Modal, Platform, Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, View, ViewStyle } from 'react-native';
+import { Text } from '@/components/Typography';
 import Animated, { FadeIn, FadeInUp, FadeOut, FadeOutUp, ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, R, S, shadow, T } from './theme';
+import { useThemeMode } from './themeMode';
 
 type Tone = 'success' | 'error' | 'info';
+type ToastAction = { label: string; onPress: () => void };
 type ConfirmOpts = { title: string; message?: string; confirmLabel?: string; destructive?: boolean };
 
 const Ctx = createContext<{
-  toast: (message: string, tone?: Tone) => void;
+  /** With an `action` (e.g. Undo) the toast stays up longer and shows a button. */
+  toast: (message: string, tone?: Tone, action?: ToastAction) => void;
   confirm: (o: ConfirmOpts) => Promise<boolean>;
 }>({ toast: () => {}, confirm: async () => false });
 
@@ -18,18 +22,19 @@ export const useFeedback = () => useContext(Ctx);
 
 /** App-wide toasts and confirm dialogs that look the same on web, iOS and Android (replaces window.alert/confirm). */
 export function FeedbackProvider({ children }: { children: ReactNode }) {
+  useThemeMode(); // toasts/dialogs follow light/dark
   const insets = useSafeAreaInsets();
-  const [toastState, setToast] = useState<{ id: number; message: string; tone: Tone } | null>(null);
+  const [toastState, setToast] = useState<{ id: number; message: string; tone: Tone; action?: ToastAction } | null>(null);
   const [dialog, setDialog] = useState<(ConfirmOpts & { resolve: (v: boolean) => void }) | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>();
 
-  const toast = useCallback((message: string, tone: Tone = 'info') => {
+  const toast = useCallback((message: string, tone: Tone = 'info', action?: ToastAction) => {
     if (Platform.OS !== 'web') {
       Haptics.notificationAsync(tone === 'error' ? Haptics.NotificationFeedbackType.Error : Haptics.NotificationFeedbackType.Success);
     }
     clearTimeout(timer.current);
-    setToast({ id: Date.now(), message, tone });
-    timer.current = setTimeout(() => setToast(null), 2800);
+    setToast({ id: Date.now(), message, tone, action });
+    timer.current = setTimeout(() => setToast(null), action ? 6000 : 2800);
   }, []);
 
   const confirm = useCallback((o: ConfirmOpts) => new Promise<boolean>((resolve) => setDialog({ ...o, resolve })), []);
@@ -47,6 +52,12 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
           <Pressable onPress={() => setToast(null)} style={styles.toast} accessibilityRole="alert">
             <Ionicons name={icon[toastState.tone]} size={20} color={color[toastState.tone]} />
             <Text style={[T.body, { flex: 1 }]}>{toastState.message}</Text>
+            {toastState.action && (
+              <Pressable hitSlop={10} accessibilityRole="button" accessibilityLabel={toastState.action.label}
+                onPress={() => { const a = toastState.action!; setToast(null); a.onPress(); }}>
+                <Text style={{ color: C.primary, fontWeight: '800' }}>{toastState.action.label}</Text>
+              </Pressable>
+            )}
           </Pressable>
         </Animated.View>
       )}

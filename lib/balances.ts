@@ -1,4 +1,4 @@
-import { Expense, Settlement, Split, SplitType } from './supabase';
+import type { Expense, Settlement, Split, SplitType } from './supabase';
 
 /** Work in integer cents so splits always add up exactly. */
 const cents = (n: number) => Math.round(n * 100);

@@ -13,9 +13,12 @@
     "db:reset": "supabase db reset",
     "db:link": "supabase link",
     "db:push": "supabase db push --remote",
-    "db:types": "supabase gen types typescript --remote > lib/database.types.ts"
+    "db:types": "supabase gen types typescript --remote > lib/database.types.ts",
+    "test": "node --test \"tests/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@expo-google-fonts/inter": "^0.2.3",
     "@expo/metro-runtime": "~4.0.0",
     "@expo/vector-icons": "~14.0.4",
     "@react-native-async-storage/async-storage": "1.23.1",
@@ -25,6 +28,7 @@
     "expo-constants": "~17.0.3",
     "expo-font": "~13.0.4",
     "expo-haptics": "~14.0.0",
+    "expo-image-picker": "~16.0.6",
     "expo-linear-gradient": "~14.0.1",
     "expo-linking": "~7.0.3",
     "expo-router": "~4.0.9",

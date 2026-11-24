@@ -1,9 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { computeBalances, simplifyDebts, Transfer } from './balances';
 import { useAuth } from './auth';
 import { Expense, Group, Invite, supabase } from './supabase';
 import { useGroup } from './useGroup';
+import { catMeta, setCustomCategories } from './theme';
+import { BudgetAlert, budgetAlerts } from './alerts';
+import { useFeedback } from './feedback';
+import { takeParkedInvite } from './links';
 
 export type HouseholdRow = Group & { memberCount: number; memberNames: string[]; created_at?: string };
 const KEY = 'budgetly.activeHousehold';
@@ -18,6 +22,8 @@ type Ctx = {
   data: ReturnType<typeof useGroup>;
   net: Record<string, number>;
   transfers: Transfer[];
+  /** Budgets at or above 80% this month (overall and per category). */
+  alerts: BudgetAlert[];
   /** Opens the global add/edit sheet (rendered by the tabs layout). */
   openAdd: (editing?: Expense | null, groupId?: string) => void;
   sheet: { open: boolean; editing: Expense | null; groupId: string | null };
@@ -81,14 +87,44 @@ export function HouseholdProvider({ children }: { children: ReactNode }) {
     AsyncStorage.setItem(KEY, id).catch(() => {});
   }, []);
 
+  // Redeem an invite link opened earlier (possibly before signing in).
+  const { toast: notify } = useFeedback();
+  useEffect(() => {
+    if (!uid || households === null) return;
+    takeParkedInvite().then(async (code) => {
+      if (!code) return;
+      const { data: gid, error } = await supabase.rpc('join_group_by_code', { code });
+      if (error) return notify(error.message, 'error');
+      await refreshHouseholds(); setActive(gid);
+      notify('Joined. It is now your current space', 'success');
+    });
+  }, [uid, households === null]);
+
   const data = useGroup(activeId ?? undefined);
+  setCustomCategories(data.categories); // synchronous: every child render sees this space's categories
   const memberIds = useMemo(() => data.members.map((m) => m.user_id), [data.members]);
   const net = useMemo(() => computeBalances(data.expenses, data.splits, data.settlements, memberIds),
     [data.expenses, data.splits, data.settlements, memberIds]);
   const transfers = useMemo(() => simplifyDebts(net), [net]);
 
+  // Budget alerts: computed from this month's spending vs. the overall and per-category limits.
+  const alerts = useMemo(() => budgetAlerts(data.expenses, Number(data.group?.monthly_budget ?? 0), data.catBudgets, (k) => catMeta(k).label), [data.expenses, data.group?.monthly_budget, data.catBudgets]);
+  // Toast when a limit crosses 80% or 100% while the app is open (including other members' entries arriving live).
+  const { toast } = useFeedback();
+  const prevLevels = useRef<{ space: string | null; levels: Record<string, number> } | null>(null);
+  useEffect(() => {
+    if (!data.group) return;
+    const levels = Object.fromEntries(alerts.map((a) => [a.key, a.level]));
+    const prev = prevLevels.current;
+    if (prev && prev.space === data.group.id) {
+      const crossed = alerts.filter((a) => a.level > (prev.levels[a.key] ?? 0)).sort((x, y) => y.level - x.level)[0];
+      if (crossed) toast(crossed.level >= 100 ? `${crossed.label} budget is used up` : `${crossed.label} is at ${Math.round(crossed.pct * 100)}% of its budget`, crossed.level >= 100 ? 'error' : 'info');
+    }
+    prevLevels.current = { space: data.group.id, levels };
+  }, [alerts, data.group?.id]);
+
   const value: Ctx = {
-    households, invites, activeId, setActive, refreshHouseholds, data, net, transfers, sheet,
+    households, invites, activeId, setActive, refreshHouseholds, data, net, transfers, alerts, sheet,
     openAdd: (editing = null, groupId) => setSheet({ open: true, editing, groupId: groupId ?? activeId }),
     closeSheet: () => setSheet({ open: false, editing: null, groupId: null }),
   };

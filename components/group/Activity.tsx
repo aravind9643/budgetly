@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '@/components/Typography';
 import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 import { Card, Chip, Divider, EmptyState, Field, Section } from '@/components/ui';
 import { Expense } from '@/lib/supabase';
-import { C, CATEGORIES, dayLabel, money, S, T } from '@/lib/theme';
+import { C, catMeta, dayLabel, money, S, T } from '@/lib/theme';
 import { TransactionRow } from './TransactionRow';
 export type RowInfo = { who: string; splitCount: number; myShare?: number };
 
@@ -21,7 +22,7 @@ export function Activity({ items, cur, me, nameOf, rowInfo, onOpen, canEdit }: {
     const needle = q.trim().toLowerCase();
     const list = items.filter((e) =>
       (filter === 'all' || (filter === 'mine' ? (e.paid_by ?? e.user_id) === me : e.type === filter)) &&
-      (!needle || e.title.toLowerCase().includes(needle) || (CATEGORIES[e.category]?.label ?? '').toLowerCase().includes(needle)));
+      (!needle || e.title.toLowerCase().includes(needle) || catMeta(e.category).label.toLowerCase().includes(needle)));
     const map = new Map<string, Expense[]>();
     list.forEach((e) => map.set(e.spent_at, [...(map.get(e.spent_at) ?? []), e]));
     return [...map.entries()];

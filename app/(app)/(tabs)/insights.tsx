@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
+import { Text } from '@/components/Typography';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Donut } from '@/components/Donut';
 import { MonthSwitcher } from '@/components/Nav';
@@ -12,10 +13,12 @@ import { exportCsv } from '@/lib/export';
 import { useHousehold } from '@/lib/household';
 import { C, catMeta, money, monthLabel, monthRange, R, S, sameMonth, T } from '@/lib/theme';
 import { displayName } from '@/lib/useGroup';
+import { useThemeMode } from '@/lib/themeMode';
 
 const monthStart = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
 
 export default function Insights() {
+  useThemeMode(); // re-render this screen when light/dark changes
   const router = useRouter();
   const { session } = useAuth();
   const { data, households } = useHousehold();
@@ -169,7 +172,7 @@ export default function Insights() {
                   return (
                     <View key={c} style={[s.row, { gap: S.md }]}>
                       <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: m.color + '22', alignItems: 'center', justifyContent: 'center' }}>
-                        <Ionicons name={m.icon} size={18} color={m.color} />
+                        {m.emoji ? <Text style={{ fontSize: 17 }}>{m.emoji}</Text> : <Ionicons name={m.icon} size={18} color={m.color} />}
                       </View>
                       <Text style={[T.body, { flex: 1, fontWeight: '600' }]}>{m.label}</Text>
                       <Text style={[T.caption, { width: 40, textAlign: 'right' }]}>{Math.round((v / st.spent) * 100)}%</Text>

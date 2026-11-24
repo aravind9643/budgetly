@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Tabs } from 'expo-router';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '@/components/Typography';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TransactionSheet } from '@/components/group/TransactionSheet';
 import { Press, tap } from '@/components/ui';
@@ -10,6 +11,7 @@ import { useFeedback } from '@/lib/feedback';
 import { useHousehold } from '@/lib/household';
 import { C, shadow } from '@/lib/theme';
 import { displayName } from '@/lib/useGroup';
+import { useThemeMode } from '@/lib/themeMode';
 
 const TABS: Record<string, { label: string; icon: any; iconActive: any }> = {
   index: { label: 'Overview', icon: 'grid-outline', iconActive: 'grid' },
@@ -20,6 +22,7 @@ const TABS: Record<string, { label: string; icon: any; iconActive: any }> = {
 const WITH_FAB = new Set(['index', 'activity']);
 
 function TabBar({ state, navigation }: BottomTabBarProps) {
+  useThemeMode();
   const insets = useSafeAreaInsets();
   const { openAdd, activeId } = useHousehold();
   const { toast } = useFeedback();
@@ -27,7 +30,7 @@ function TabBar({ state, navigation }: BottomTabBarProps) {
   return (
     <View>
       {/* Extended floating action button: the primary task, labelled, above the bar. */}
-      {WITH_FAB.has(current) && (
+      {WITH_FAB.has(current) && activeId && (
         <View style={{ position: 'absolute', right: 20, top: -72, zIndex: 10 }}>
           <Press onPress={() => (activeId ? openAdd(null) : toast('Create or join a space first'))} accessibilityLabel="New expense"
             style={[{ flexDirection: 'row', alignItems: 'center', gap: 8, height: 54, paddingHorizontal: 20, borderRadius: 18,
@@ -59,6 +62,7 @@ function TabBar({ state, navigation }: BottomTabBarProps) {
 }
 
 export default function TabsLayout() {
+  useThemeMode(); // re-render this screen when light/dark changes
   const { session } = useAuth();
   const { sheet, closeSheet, data, activeId } = useHousehold();
   const me = session?.user.id ?? '';

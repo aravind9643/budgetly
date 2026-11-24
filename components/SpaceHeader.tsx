@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { ReactNode, useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '@/components/Typography';
 import { HouseholdPicker } from '@/components/HouseholdPicker';
 import { Avatar, Press, s } from '@/components/ui';
 import { useAuth } from '@/lib/auth';

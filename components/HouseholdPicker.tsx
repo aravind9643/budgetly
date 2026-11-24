@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '@/components/Typography';
 import { JoinSheet } from '@/components/JoinSheet';
 import { Button, Press, Sheet, s } from '@/components/ui';
 import { useFeedback } from '@/lib/feedback';

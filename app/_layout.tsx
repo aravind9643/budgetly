@@ -14,11 +14,13 @@ function ThemedStatusBar() {
 }
 
 function Gate() {
+  useThemeMode(); // re-render the navigator (background colours) when light/dark changes
   const { session, loading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
   useEffect(() => {
     if (loading) return;
+    if (segments[0] === 'join') return; // the invite link screen handles its own redirect
     const inAuth = segments[0] === '(auth)';
     if (!session && !inAuth) router.replace('/login');
     else if (session && inAuth) router.replace('/');

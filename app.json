@@ -7,10 +7,31 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "ios": { "supportsTablet": true, "bundleIdentifier": "com.example.budgetly" },
-    "android": { "package": "com.example.budgetly" },
-    "web": { "bundler": "metro", "output": "single", "name": "Budgetly", "shortName": "Budgetly" },
-    "plugins": ["expo-router"],
-    "experiments": { "typedRoutes": false }
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.example.budgetly"
+    },
+    "android": {
+      "package": "com.example.budgetly"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "name": "Budgetly",
+      "shortName": "Budgetly"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Budgetly uses your photos to attach receipts to expenses.",
+          "cameraPermission": "Budgetly uses the camera to photograph receipts."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
   }
 }

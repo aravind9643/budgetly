@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Platform, Pressable, ScrollView, Share, Text, View } from 'react-native';
-import { BudgetSheet } from '@/components/BudgetSheet';
+import { Platform, Pressable, ScrollView, Share, View } from 'react-native';
+import { Text } from '@/components/Typography';
 import { BackButton, ListRow } from '@/components/Nav';
 import {
   Avatar, Badge, Button, Card, Divider, EmptyState, Field, IconButton, Loading, Press, Screen, Section, Sheet, s,
@@ -10,23 +10,25 @@ import {
 import { useAuth } from '@/lib/auth';
 import { computeBalances } from '@/lib/balances';
 import { exportCsv } from '@/lib/export';
+import { inviteLink } from '@/lib/links';
 import { useFeedback } from '@/lib/feedback';
 import { useHousehold } from '@/lib/household';
 import { Member, supabase } from '@/lib/supabase';
 import { C, money, R, S, T } from '@/lib/theme';
 import { displayName, useGroup } from '@/lib/useGroup';
+import { useThemeMode } from '@/lib/themeMode';
 
 /** Space settings: people, invites, budget/balances/export, plus leave/delete. */
 export default function SpaceScreen() {
+  useThemeMode(); // re-render this screen when light/dark changes
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { session } = useAuth();
   const { toast, confirm } = useFeedback();
   const { activeId, setActive, refreshHouseholds } = useHousehold();
   const me = session?.user.id ?? '';
-  const { group, expenses, splits, settlements, members, invites, loading, missing, reload } = useGroup(id);
+  const { group, expenses, splits, settlements, members, invites, recurring, catBudgets, categories, loading, missing, reload } = useGroup(id);
   const [invite, setInvite] = useState(false);
-  const [budget, setBudget] = useState(false);
   const [rename, setRename] = useState(false);
 
   const net = useMemo(() => computeBalances(expenses, splits, settlements, members.map((m) => m.user_id)),
@@ -50,6 +52,8 @@ export default function SpaceScreen() {
   const unsettled = Object.values(net).filter((v) => Math.abs(v) >= 0.005).length;
   const nameOf = (u: string) => (u === me ? 'You' : displayName(members.find((m) => m.user_id === u)));
   const isActive = activeId === group.id;
+  // Budgets/Recurring/Categories act on the current space, so switch to this one first.
+  const open = (path: '/budgets' | '/recurring' | '/categories') => { if (!isActive) setActive(group.id); router.push(path); };
 
   const remove = async (m: Member) => {
     const nm = displayName(m);
@@ -85,7 +89,7 @@ export default function SpaceScreen() {
     router.replace('/settings');
   };
 
-  const since = (d?: string) => (d ? `Joined ${new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}` : 'Member');
+  const since = (d?: string | null) => (d ? `Joined ${new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}` : 'Member');
 
   return (
     <Screen>
@@ -162,9 +166,17 @@ export default function SpaceScreen() {
 
         <Section title="Space">
           <Card style={{ padding: 0, overflow: 'hidden' }}>
-            <ListRow icon="flag-outline" tint={C.warn} title="Budget"
-              subtitle={Number(group.monthly_budget) > 0 ? `${money(Number(group.monthly_budget), cur)} per month` : 'No monthly budget'}
-              onPress={() => setBudget(true)} />
+            <ListRow icon="flag-outline" tint={C.warn} title="Budgets"
+              subtitle={Number(group.monthly_budget) > 0 ? `${money(Number(group.monthly_budget), cur)} a month${catBudgets.length ? ` · ${catBudgets.length} category limit${catBudgets.length === 1 ? '' : 's'}` : ''}` : 'Set monthly and category limits'}
+              onPress={() => open('/budgets')} />
+            <Divider />
+            <ListRow icon="repeat" tint={C.primary} title="Recurring"
+              subtitle={recurring.filter((r) => r.active).length ? `${recurring.filter((r) => r.active).length} active · logged automatically` : 'Rent, subscriptions, insurance'}
+              onPress={() => open('/recurring')} />
+            <Divider />
+            <ListRow icon="pricetags-outline" tint="#8A63D2" title="Categories"
+              subtitle={categories.length ? `${categories.length} custom + built-in` : 'Add your own, e.g. Pets or Kids'}
+              onPress={() => open('/categories')} />
             <Divider />
             <ListRow icon="swap-horizontal" tint={C.positive} title="Balances"
               subtitle={unsettled === 0 ? 'Everyone is even' : Math.abs(myNet) < 0.005 ? "You're even · others aren't yet"
@@ -184,8 +196,6 @@ export default function SpaceScreen() {
 
       <InviteSheet visible={invite} onClose={() => setInvite(false)} groupId={group.id} groupName={group.name}
         code={group.invite_code} me={me} memberEmails={members.map((m) => m.profiles?.email?.toLowerCase() ?? '')} onSent={reload} />
-      <BudgetSheet visible={budget} onClose={() => setBudget(false)} groupId={group.id} initial={Number(group.monthly_budget)}
-        cur={cur} canEdit={isAdmin} onSaved={() => { reload(); refreshHouseholds(); }} />
       <RenameSheet visible={rename} onClose={() => setRename(false)} groupId={group.id} initial={group.name}
         onSaved={() => { reload(); refreshHouseholds(); }} />
     </Screen>
@@ -202,10 +212,12 @@ function InviteSheet({ visible, onClose, groupId, groupName, code, me, memberEma
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Share a one-tap link; the code is in the message too for typing in by hand.
   const share = async () => {
-    const text = `Join "${groupName}" on Budgetly with invite code ${code}`;
+    const link = inviteLink(code);
+    const text = `Join "${groupName}" on Budgetly: ${link} (or enter code ${code})`;
     if (Platform.OS === 'web') {
-      try { await navigator.clipboard.writeText(code); setMsg('Invite code copied'); } catch { setMsg(`Code: ${code}`); }
+      try { await navigator.clipboard.writeText(link); setMsg('Invite link copied'); } catch { setMsg(link); }
     } else Share.share({ message: text });
   };
   const send = async () => {
@@ -230,7 +242,7 @@ function InviteSheet({ visible, onClose, groupId, groupName, code, me, memberEma
         </View>
         <View style={[s.row, { gap: 6 }]}>
           <Ionicons name={Platform.OS === 'web' ? 'copy-outline' : 'share-outline'} size={20} color={C.primary} />
-          <Text style={{ color: C.primary, fontWeight: '700' }}>{Platform.OS === 'web' ? 'Copy' : 'Share'}</Text>
+          <Text style={{ color: C.primary, fontWeight: '700' }}>{Platform.OS === 'web' ? 'Copy link' : 'Share link'}</Text>
         </View>
       </Press>
       {msg && <Text style={{ color: C.positive, fontWeight: '600' }}>✓ {msg}</Text>}

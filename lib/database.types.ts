@@ -39,6 +39,70 @@ export type Database = {
   }
   public: {
     Tables: {
+      categories: {
+        Row: {
+          color: string
+          created_at: string
+          emoji: string
+          group_id: string
+          id: string
+          key: string
+          label: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          emoji?: string
+          group_id: string
+          id?: string
+          key: string
+          label: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          emoji?: string
+          group_id?: string
+          id?: string
+          key?: string
+          label?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categories_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      category_budgets: {
+        Row: {
+          amount: number
+          category: string
+          group_id: string
+        }
+        Insert: {
+          amount: number
+          category: string
+          group_id: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          group_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "category_budgets_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       expense_splits: {
         Row: {
           amount: number
@@ -94,6 +158,7 @@ export type Database = {
           id: string
           is_personal: boolean
           paid_by: string
+          receipt_path: string | null
           spent_at: string
           split_type: string
           title: string
@@ -108,6 +173,7 @@ export type Database = {
           id?: string
           is_personal?: boolean
           paid_by: string
+          receipt_path?: string | null
           spent_at?: string
           split_type?: string
           title: string
@@ -122,6 +188,7 @@ export type Database = {
           id?: string
           is_personal?: boolean
           paid_by?: string
+          receipt_path?: string | null
           spent_at?: string
           split_type?: string
           title?: string
@@ -277,6 +344,76 @@ export type Database = {
         }
         Relationships: []
       }
+      recurring_expenses: {
+        Row: {
+          active: boolean
+          amount: number
+          category: string
+          created_at: string
+          created_by: string
+          frequency: string
+          group_id: string
+          id: string
+          is_personal: boolean
+          next_date: string
+          paid_by: string
+          splits: Json
+          title: string
+        }
+        Insert: {
+          active?: boolean
+          amount: number
+          category?: string
+          created_at?: string
+          created_by: string
+          frequency: string
+          group_id: string
+          id?: string
+          is_personal?: boolean
+          next_date: string
+          paid_by: string
+          splits?: Json
+          title: string
+        }
+        Update: {
+          active?: boolean
+          amount?: number
+          category?: string
+          created_at?: string
+          created_by?: string
+          frequency?: string
+          group_id?: string
+          id?: string
+          is_personal?: boolean
+          next_date?: string
+          paid_by?: string
+          splits?: Json
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recurring_expenses_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_expenses_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_expenses_paid_by_fkey"
+            columns: ["paid_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       settlements: {
         Row: {
           amount: number
@@ -347,12 +484,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      is_admin: { Args: { g: string }; Returns: boolean }
       is_member: { Args: { g: string }; Returns: boolean }
       join_group_by_code: { Args: { code: string }; Returns: string }
+      reset_balances: {
+        Args: { p_group: string; p_transfers: Json }
+        Returns: number
+      }
       respond_invite: {
         Args: { accept: boolean; invite_id: string }
         Returns: string
       }
+      run_recurring: { Args: { p_group: string }; Returns: number }
       save_expense: {
         Args: {
           p_amount: number

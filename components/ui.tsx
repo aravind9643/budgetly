@@ -1,10 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { ReactNode, useEffect, useState } from 'react';
-import {
-  ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleProp, StyleSheet, Text,
-  TextInput, TextInputProps, TextStyle, View, ViewStyle,
-} from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleProp, StyleSheet, TextInputProps, TextStyle, View, ViewStyle } from 'react-native';
+import { Text, TextInput } from '@/components/Typography';
 import Animated, {
   Easing, FadeIn, FadeOut, SlideInDown, SlideOutDown, useAnimatedStyle, useSharedValue, withRepeat, withSpring, withTiming,
 } from 'react-native-reanimated';
@@ -235,10 +233,10 @@ export function Badge({ label, tone = 'neutral' }: { label: string; tone?: 'neut
   );
 }
 
-export function IconTile({ icon, color, size = 40 }: { icon: IconName; color: string; size?: number }) {
+export function IconTile({ icon, color, size = 40, emoji }: { icon: IconName; color: string; size?: number; emoji?: string }) {
   return (
     <View style={{ width: size, height: size, borderRadius: size * 0.32, backgroundColor: color + '22', alignItems: 'center', justifyContent: 'center' }}>
-      <Ionicons name={icon} size={size * 0.5} color={color} />
+      {emoji ? <Text style={{ fontSize: size * 0.48 }}>{emoji}</Text> : <Ionicons name={icon} size={size * 0.5} color={color} />}
     </View>
   );
 }
@@ -297,8 +295,6 @@ export function Sheet({ visible, onClose, title, children, footer }: {
     </Modal>
   );
 }
-
-export const txt = (style: TextStyle, extra?: TextStyle) => [style, extra];
 
 // Plain objects with getters (not StyleSheet.create) so colors follow the active light/dark scheme.
 export const s = {

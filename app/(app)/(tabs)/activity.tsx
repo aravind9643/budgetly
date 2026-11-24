@@ -10,9 +10,11 @@ import { useHousehold } from '@/lib/household';
 import { Expense } from '@/lib/supabase';
 import { monthLabel, monthRange, S, sameMonth } from '@/lib/theme';
 import { displayName } from '@/lib/useGroup';
+import { useThemeMode } from '@/lib/themeMode';
 
 /** Activity tab: all expenses of the active space for one month, grouped by day, with search and filters. */
 export default function ActivityTab() {
+  useThemeMode(); // re-render this screen when light/dark changes
   const router = useRouter();
   const { m } = useLocalSearchParams<{ m?: string }>();
   const { session } = useAuth();

@@ -82,7 +82,8 @@ export const shadow = (color: string, opacity: number, radius: number, y: number
     ? { boxShadow: `0px ${y}px ${radius}px ${color}${Math.round(opacity * 255).toString(16).padStart(2, '0')}` }
     : { shadowColor: color, shadowOpacity: opacity, shadowRadius: radius, shadowOffset: { width: 0, height: y }, elevation: 8 };
 
-export const CATEGORIES: Record<string, { label: string; icon: IconName; color: string }> = {
+export type CatMeta = { label: string; icon: IconName; color: string; emoji?: string };
+export const CATEGORIES: Record<string, CatMeta> = {
   food: { label: 'Food', icon: 'fast-food', color: '#FB923C' },
   groceries: { label: 'Groceries', icon: 'cart', color: '#A3E635' },
   transport: { label: 'Transport', icon: 'car', color: '#38BDF8' },
@@ -92,7 +93,14 @@ export const CATEGORIES: Record<string, { label: string; icon: IconName; color: 
   health: { label: 'Health', icon: 'medkit', color: '#34D399' },
   other: { label: 'Other', icon: 'ellipsis-horizontal', color: '#94A3B8' },
 };
-export const catMeta = (k: string) => CATEGORIES[k] ?? CATEGORIES.other;
+// Custom categories of the current space (set by HouseholdProvider). They render with an emoji instead of an icon.
+let CUSTOM: Record<string, CatMeta> = {};
+export const setCustomCategories = (list: { key: string; label: string; emoji: string; color: string }[]) => {
+  CUSTOM = Object.fromEntries(list.map((c) => [c.key, { label: c.label, icon: 'pricetag', color: c.color, emoji: c.emoji }]));
+};
+/** Built-in + custom categories, in display order. */
+export const allCategories = (): [string, CatMeta][] => [...Object.entries(CATEGORIES).filter(([k]) => k !== 'other'), ...Object.entries(CUSTOM), ['other', CATEGORIES.other]];
+export const catMeta = (k: string): CatMeta => CATEGORIES[k] ?? CUSTOM[k] ?? CATEGORIES.other;
 
 export const money = (n: number, cur = 'USD', compact = false) => {
   try {

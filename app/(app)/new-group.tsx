@@ -1,18 +1,21 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { Text } from '@/components/Typography';
 import { Button, Card, Chip, Field, Header, IconButton, Press, Screen, Section } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { useFeedback } from '@/lib/feedback';
 import { useHousehold } from '@/lib/household';
 import { supabase } from '@/lib/supabase';
 import { C, money, R, S, T } from '@/lib/theme';
+import { useThemeMode } from '@/lib/themeMode';
 
 const EMOJIS = ['💰', '🏠', '✈️', '🍕', '🎉', '👨‍👩‍👧', '🚗', '🎓', '💼', '🛒', '💍', '🐶'];
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'INR', 'JPY', 'AUD', 'CAD'];
 const SUGGESTIONS = ['Home', 'Flatmates', 'Weekend trip', 'Us two'];
 
 export default function NewGroup() {
+  useThemeMode(); // re-render this screen when light/dark changes
   const router = useRouter();
   const { session } = useAuth();
   const { toast } = useFeedback();

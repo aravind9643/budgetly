@@ -10,9 +10,11 @@ import { computeBalances, simplifyDebts } from '@/lib/balances';
 import { useHousehold } from '@/lib/household';
 import { S } from '@/lib/theme';
 import { displayName, useGroup } from '@/lib/useGroup';
+import { useThemeMode } from '@/lib/themeMode';
 
 /** Balances tab: who owes what in the active space (or `?g=<space id>`). */
 export default function BalancesScreen() {
+  useThemeMode(); // re-render this screen when light/dark changes
   const router = useRouter();
   const { g } = useLocalSearchParams<{ g?: string }>();
   const { session } = useAuth();
@@ -38,7 +40,7 @@ export default function BalancesScreen() {
       {loading || !group ? <Loading /> : (
         <ScrollView contentContainerStyle={{ paddingHorizontal: S.xl, paddingBottom: 40 }}>
           <Balances groupId={group.id} me={me} cur={group.currency} net={net} transfers={transfers} settlements={settlements}
-            nameOf={nameOf} isFormer={(u) => !memberIds.includes(u)} reload={reload} />
+            nameOf={nameOf} isFormer={(u) => !memberIds.includes(u)} reload={reload} isOwner={group.owner_id === me} />
         </ScrollView>
       )}
     </Screen>

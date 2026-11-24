@@ -3,8 +3,10 @@ import { Loading, Screen } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { HouseholdProvider } from '@/lib/household';
 import { C } from '@/lib/theme';
+import { useThemeMode } from '@/lib/themeMode';
 
 export default function AppLayout() {
+  useThemeMode(); // re-render this screen when light/dark changes
   const { session, loading } = useAuth();
   if (loading) return <Screen><Loading /></Screen>;
   if (!session) return <Redirect href="/login" />;

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Text } from 'react-native';
+import { Text } from '@/components/Typography';
 import { Button, Field, Sheet } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { C, T } from '@/lib/theme';

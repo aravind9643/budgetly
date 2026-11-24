@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '@/components/Typography';
 import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 import { Avatar, Badge, Button, Card, Divider, EmptyState, Field, Section, Sheet, s } from '@/components/ui';
 import { Transfer } from '@/lib/balances';
@@ -8,14 +9,26 @@ import { useFeedback } from '@/lib/feedback';
 import { Settlement, supabase } from '@/lib/supabase';
 import { C, dayLabel, money, R, S, T } from '@/lib/theme';
 
-export function Balances({ groupId, me, cur, net, transfers, settlements, nameOf, isFormer, reload }: {
+export function Balances({ groupId, me, cur, net, transfers, settlements, nameOf, isFormer, reload, isOwner = false }: {
   groupId: string; me: string; cur: string; net: Record<string, number>; transfers: Transfer[];
-  settlements: Settlement[]; nameOf: (u: string) => string; isFormer: (u: string) => boolean; reload: () => void;
+  settlements: Settlement[]; nameOf: (u: string) => string; isFormer: (u: string) => boolean; reload: () => void; isOwner?: boolean;
 }) {
   const { toast, confirm } = useFeedback();
   const [settle, setSettle] = useState<Transfer | null>(null);
   const mine = net[me] ?? 0;
   const people = Object.entries(net).filter(([u, v]) => !isFormer(u) || Math.abs(v) >= 0.005).sort((a, b) => b[1] - a[1]);
+
+  // Owner-only reset, e.g. when old entries predate splits and the history doesn't reflect reality.
+  const startFresh = async () => {
+    const ok = await confirm({
+      title: 'Start balances fresh?', confirmLabel: 'Reset to zero', destructive: true,
+      message: `Records ${transfers.length} payment${transfers.length === 1 ? '' : 's'} as settled so everyone is even. Entries are kept; only balances reset.`,
+    });
+    if (!ok) return;
+    const { error } = await supabase.rpc('reset_balances', { p_group: groupId, p_transfers: transfers as any });
+    if (error) return toast(error.message, 'error');
+    toast('Balances reset. Everyone is even', 'success'); reload();
+  };
 
   const undo = async (st: Settlement) => {
     if (!(await confirm({ title: 'Undo repayment?', message: `${money(Number(st.amount), cur)} from ${nameOf(st.from_user)} to ${nameOf(st.to_user)}`, confirmLabel: 'Undo', destructive: true }))) return;
@@ -122,6 +135,15 @@ export function Balances({ groupId, me, cur, net, transfers, settlements, nameOf
             ))}
           </Card>
         </Section>
+      )}
+
+      {isOwner && transfers.length > 0 && (
+        <View style={{ gap: S.sm }}>
+          <Button title="Start fresh" icon="refresh" variant="secondary" onPress={startFresh} />
+          <Text style={[T.caption, { textAlign: 'center' }]}>
+            Marks every suggested payment as settled so all balances return to zero. History stays.
+          </Text>
+        </View>
       )}
 
       <SettleSheet transfer={settle} me={me} cur={cur} groupId={groupId} nameOf={nameOf}

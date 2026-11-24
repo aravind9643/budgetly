@@ -1,15 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import { Text } from '@/components/Typography';
 import Animated, { FadeIn, FadeInDown, Layout } from 'react-native-reanimated';
 import { Button, Field, Screen, Segmented } from '@/components/ui';
 import { useFeedback } from '@/lib/feedback';
 import { supabase } from '@/lib/supabase';
 import { C, R, S, T } from '@/lib/theme';
+import { useThemeMode } from '@/lib/themeMode';
 
 type Mode = 'in' | 'up';
 
 export default function Login() {
+  useThemeMode(); // re-render this screen when light/dark changes
   const { toast } = useFeedback();
   const [mode, setMode] = useState<Mode>('in');
   const [name, setName] = useState('');

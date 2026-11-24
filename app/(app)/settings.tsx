@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
+import { Text } from '@/components/Typography';
 import { JoinSheet } from '@/components/JoinSheet';
 import { BackButton, ListRow } from '@/components/Nav';
 import { Avatar, Button, Card, Divider, Field, Press, Screen, Section, Segmented, Sheet, s } from '@/components/ui';
@@ -14,6 +15,7 @@ import { ThemePref, useThemeMode } from '@/lib/themeMode';
 
 /** Account, appearance and the user's spaces, all in one place behind the avatar. */
 export default function Settings() {
+  useThemeMode(); // re-render this screen when light/dark changes
   const router = useRouter();
   const { session } = useAuth();
   const { toast, confirm } = useFeedback();
