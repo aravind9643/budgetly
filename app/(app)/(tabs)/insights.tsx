@@ -1,16 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
+import { Pressable, ScrollView, View } from 'react-native';
 import { Text } from '@/components/Typography';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Donut } from '@/components/Donut';
 import { MonthSwitcher } from '@/components/Nav';
 import { SpaceHeader } from '@/components/SpaceHeader';
-import { Avatar, Button, Card, EmptyState, IconButton, Loading, ProgressBar, Screen, s } from '@/components/ui';
+import { Avatar, Button, Card, EmptyState, IconButton, Loading, ProgressBar, Screen, Segmented, s } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { exportCsv } from '@/lib/export';
 import { useHousehold } from '@/lib/household';
+import { dailySeries, withMyShare } from '@/lib/personal';
 import { C, catMeta, money, monthLabel, monthRange, R, S, sameMonth, T } from '@/lib/theme';
 import { displayName } from '@/lib/useGroup';
 import { useThemeMode } from '@/lib/themeMode';
@@ -23,15 +24,20 @@ export default function Insights() {
   const { session } = useAuth();
   const { data, households } = useHousehold();
   const me = session?.user.id ?? '';
+  const params = useLocalSearchParams<{ view?: string }>();
+  const [view, setView] = useState<'space' | 'me'>(params.view === 'me' ? 'me' : 'space');
+  useEffect(() => { if (params.view === 'me' || params.view === 'space') setView(params.view); }, [params.view]);
   const [month, setMonth] = useState(() => monthStart(new Date()));
   const isCurrent = sameMonth(month, new Date());
   const g = data.group;
   const cur = g?.currency ?? 'USD';
-  const budget = Number(g?.monthly_budget ?? 0);
+  const spaceBudget = Number(g?.monthly_budget ?? 0);
+  const budget = view === 'me' ? 0 : spaceBudget; // the budget belongs to the space, not to one person
   const nameOf = (u: string) => (u === me ? 'You' : displayName(data.members.find((m) => m.user_id === u)));
 
   const st = useMemo(() => {
-    const out = data.expenses.filter((e) => e.type === 'expense');
+    const source = view === 'me' ? withMyShare(data.expenses, data.splits, me, data.members.map((m) => m.user_id)) : data.expenses;
+    const out = source.filter((e) => e.type === 'expense');
     const inMonth = (m: Date) => { const r = monthRange(m); return out.filter((e) => e.spent_at >= r.start && e.spent_at <= r.end); };
     const items = inMonth(month);
     const spent = items.reduce((a, e) => a + Number(e.amount), 0);
@@ -49,8 +55,9 @@ export default function Insights() {
       return { m, total: inMonth(m).reduce((a, e) => a + Number(e.amount), 0) };
     });
     const prev = six[4].total;
-    return { items, spent, byCat, byPayer, biggest, perDay, estimate: isCurrent ? perDay * daysIn : null, six, prev };
-  }, [data.expenses, month, isCurrent]);
+    const daily = dailySeries(items, month);
+    return { items, spent, byCat, byPayer: view === 'me' ? [] : byPayer, biggest, perDay, estimate: isCurrent ? perDay * daysIn : null, six, prev, daily, dayNow };
+  }, [data.expenses, data.splits, data.members, me, view, month, isCurrent]);
 
   // One plain-language observation, most useful first.
   const insight = useMemo(() => {
@@ -90,10 +97,13 @@ export default function Insights() {
           onNext={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} />
 
         <View style={{ paddingHorizontal: S.xl, gap: S.lg }}>
+          <Segmented<'space' | 'me'> value={view} onChange={setView}
+            options={[{ value: 'space', label: 'Whole space' }, { value: 'me', label: 'Just me' }]} />
           {/* Spent summary: flat, typographic */}
           <Animated.View key={month.getTime()} entering={FadeIn.duration(250)}>
             <Card style={{ gap: S.md, padding: S.xl }}>
-              <Text style={T.label}>Spent in {month.toLocaleDateString(undefined, { month: 'long' })}</Text>
+              <Text style={T.label}>{view === 'me' ? 'You spent' : 'Spent'} in {month.toLocaleDateString(undefined, { month: 'long' })}</Text>
+              {view === 'me' && <Text style={T.caption}>Your share of shared costs plus your personal ones.</Text>}
               <Text style={{ color: C.text, fontSize: 38, fontWeight: '800', letterSpacing: -1, fontVariant: ['tabular-nums'] }} adjustsFontSizeToFit numberOfLines={1}>
                 {money(st.spent, cur)}
               </Text>
@@ -112,6 +122,17 @@ export default function Insights() {
                 onPress={() => router.push({ pathname: '/activity', params: { m: monthRange(month).start.slice(0, 7) } })} />
             </Card>
           </Animated.View>
+
+          {/* Day by day */}
+          <Card style={{ gap: S.md }}>
+            <View style={[s.row, { justifyContent: 'space-between' }]}>
+              <Text style={[T.heading, { fontSize: 20 }]}>Day by day</Text>
+              <Text style={T.caption}>Tap a day to see it</Text>
+            </View>
+            <DailyBars daily={st.daily} upTo={st.dayNow} cur={cur}
+              onPick={(i) => router.push({ pathname: '/activity', params: {
+                m: monthRange(month).start.slice(0, 7), d: `${monthRange(month).start.slice(0, 8)}${String(i + 1).padStart(2, '0')}` } })} />
+          </Card>
 
           {insight && (
             <Card style={[s.row, { gap: S.md, alignItems: 'flex-start' }]}>
@@ -216,5 +237,30 @@ function Kpi({ label, value, caption }: { label: string; value: string; caption:
       <Text style={{ fontSize: 19, fontWeight: '800', color: C.text, fontVariant: ['tabular-nums'] }} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
       <Text style={T.caption} numberOfLines={1}>{caption}</Text>
     </Card>
+  );
+}
+
+const ord = (n: number) => (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th');
+
+/** One thin bar per day; the busiest day is labelled. */
+function DailyBars({ daily, upTo, cur, onPick }: { daily: number[]; upTo: number; cur: string; onPick: (dayIndex: number) => void }) {
+  const max = Math.max(...daily, 0);
+  const top = max > 0 ? daily.indexOf(max) : -1;
+  return (
+    <View style={{ gap: 6 }}>
+      <Text style={T.caption}>{top >= 0 ? `Busiest: the ${top + 1}${ord(top + 1)}, ${money(max, cur)}` : 'Nothing spent yet'}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 96, gap: 2 }}>
+        {daily.map((v, i) => (
+          <Pressable key={i} onPress={() => onPick(i)} disabled={v === 0} accessibilityRole="button" accessibilityLabel={`Day ${i + 1}: ${money(v, cur)}`}
+            style={({ pressed }) => ({ flex: 1, height: '100%', justifyContent: 'flex-end', opacity: pressed ? 0.6 : 1 })}>
+            <View style={{ height: v > 0 ? `${Math.max(4, (v / max) * 100)}%` as any : 2, borderRadius: 3,
+              backgroundColor: i === top ? C.primary : i < upTo ? C.primarySoft : C.surface2 }} />
+          </Pressable>
+        ))}
+      </View>
+      <View style={[s.row, { justifyContent: 'space-between' }]}>
+        {[1, 8, 15, 22, daily.length].map((d) => <Text key={d} style={[T.caption, { fontSize: 11 }]}>{d}</Text>)}
+      </View>
+    </View>
   );
 }

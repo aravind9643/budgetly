@@ -9,9 +9,8 @@ import { useAuth } from '@/lib/auth';
 import { useFeedback } from '@/lib/feedback';
 import { useHousehold } from '@/lib/household';
 import { supabase } from '@/lib/supabase';
-import { C, IconName, R, S, T } from '@/lib/theme';
+import { C, IconName, R, S, T, CURRENCIES } from '@/lib/theme';
 
-const CURRENCIES = ['USD', 'EUR', 'GBP', 'INR', 'JPY', 'AUD', 'CAD'];
 const EMOJIS = ['🏠', '✈️', '🛋️', '💑', '🎓', '💼'];
 const VALUE: [IconName, string, string][] = [
   ['people-outline', 'One budget, many people', 'Share a space with a partner, flatmates or a trip group.'],

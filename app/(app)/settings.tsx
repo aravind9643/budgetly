@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { Text } from '@/components/Typography';
 import { JoinSheet } from '@/components/JoinSheet';
@@ -10,7 +10,8 @@ import { useAuth } from '@/lib/auth';
 import { useFeedback } from '@/lib/feedback';
 import { useHousehold } from '@/lib/household';
 import { supabase } from '@/lib/supabase';
-import { C, R, S, T } from '@/lib/theme';
+import { C, money, monthRange, R, S, T } from '@/lib/theme';
+import { periodTotals, withMyShare } from '@/lib/personal';
 import { ThemePref, useThemeMode } from '@/lib/themeMode';
 
 /** Account, appearance and the user's spaces, all in one place behind the avatar. */
@@ -101,6 +102,8 @@ export default function Settings() {
           </Card>
         </Section>
 
+        {(households?.length ?? 0) > 1 && <AcrossSpaces me={session?.user.id ?? ''} spaces={households!.map((h) => ({ id: h.id, currency: h.currency }))} />}
+
         <Section title="Appearance">
           <Card style={{ gap: S.md }}>
             <Segmented<ThemePref> value={pref} onChange={setPref}
@@ -184,5 +187,52 @@ function PasswordSheet({ visible, onClose }: { visible: boolean; onClose: () => 
         <Button title="Save password" loading={busy} onPress={save} />
       </View>
     </Sheet>
+  );
+}
+
+/** The user's own spending this month across every space, one line per currency (never mixed). */
+function AcrossSpaces({ me, spaces }: { me: string; spaces: { id: string; currency: string | null }[] }) {
+  const [rows, setRows] = useState<{ cur: string; today: number; month: number; n: number }[] | null>(null);
+  const key = spaces.map((x) => x.id).join(',');
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      const ids = spaces.map((x) => x.id);
+      const { start, end } = monthRange(new Date());
+      const [{ data: ex }, { data: sp }, { data: mem }] = await Promise.all([
+        supabase.from('expenses').select('*').in('group_id', ids).eq('type', 'expense').gte('spent_at', start).lte('spent_at', end),
+        supabase.from('expense_splits').select('expense_id, user_id, amount, group_id').in('group_id', ids),
+        supabase.from('group_members').select('group_id, user_id').in('group_id', ids),
+      ]);
+      const byCur = new Map<string, { today: number; month: number; n: number }>();
+      for (const g of spaces) {
+        const mine = withMyShare((ex ?? []).filter((e: any) => e.group_id === g.id) as any[], (sp ?? []).filter((x: any) => x.group_id === g.id) as any[],
+          me, (mem ?? []).filter((m: any) => m.group_id === g.id).map((m: any) => m.user_id));
+        const t = periodTotals(mine);
+        const cur = g.currency ?? 'USD';
+        const acc = byCur.get(cur) ?? { today: 0, month: 0, n: 0 };
+        byCur.set(cur, { today: acc.today + t.today, month: acc.month + t.month, n: acc.n + 1 });
+      }
+      if (live) setRows([...byCur.entries()].map(([cur, v]) => ({ cur, ...v })));
+    })();
+    return () => { live = false; };
+  }, [me, key]);
+
+  return (
+    <Section title="You, across all spaces">
+      <Card style={{ gap: S.md }}>
+        {rows === null ? <Text style={T.caption}>Adding up…</Text> : rows.map((r, i) => (
+          <View key={r.cur} style={{ gap: S.xs }}>
+            {i > 0 && <Divider />}
+            <View style={[s.row, { justifyContent: 'space-between' }]}>
+              <Text style={T.caption}>{r.cur} · {r.n} space{r.n === 1 ? '' : 's'}</Text>
+              <Text style={T.caption}>Today {money(r.today, r.cur)}</Text>
+            </View>
+            <Text style={{ fontSize: 24, fontWeight: '800', color: C.text, fontVariant: ['tabular-nums'] }}>{money(r.month, r.cur)}</Text>
+            <Text style={T.caption}>your share this month</Text>
+          </View>
+        ))}
+      </Card>
+    </Section>
   );
 }

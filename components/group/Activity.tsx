@@ -11,22 +11,24 @@ export type RowInfo = { who: string; splitCount: number; myShare?: number };
 type Filter = 'all' | 'expense' | 'income' | 'mine';
 
 /** Month's transactions grouped by day, with search and filters. */
-export function Activity({ items, cur, me, nameOf, rowInfo, onOpen, canEdit }: {
-  items: Expense[]; cur: string; me: string; nameOf: (u: string) => string; rowInfo: (e: Expense) => RowInfo;
+export function Activity({ day: initialDay, items, cur, me, nameOf, rowInfo, onOpen, canEdit }: {
+  day?: string; items: Expense[]; cur: string; me: string; nameOf: (u: string) => string; rowInfo: (e: Expense) => RowInfo;
   onOpen: (e: Expense) => void; canEdit: (e: Expense) => boolean;
 }) {
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
+  const [day, setDay] = useState(initialDay); // set when opened from a bar in the daily chart
 
   const days = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const list = items.filter((e) =>
+      (!day || e.spent_at === day) &&
       (filter === 'all' || (filter === 'mine' ? (e.paid_by ?? e.user_id) === me : e.type === filter)) &&
       (!needle || e.title.toLowerCase().includes(needle) || catMeta(e.category).label.toLowerCase().includes(needle)));
     const map = new Map<string, Expense[]>();
     list.forEach((e) => map.set(e.spent_at, [...(map.get(e.spent_at) ?? []), e]));
     return [...map.entries()];
-  }, [items, q, filter, me]);
+  }, [items, q, filter, me, day]);
 
   return (
     <View style={{ gap: S.lg }}>
@@ -36,6 +38,7 @@ export function Activity({ items, cur, me, nameOf, rowInfo, onOpen, canEdit }: {
           <Chip key={f} label={{ all: 'All', expense: 'Expenses', income: 'Income', mine: 'Paid by me' }[f]}
             active={filter === f} onPress={() => setFilter(f)} />
         ))}
+        {day && <Chip label={`${dayLabel(day)}  ✕`} active onPress={() => setDay(undefined)} />}
       </View>
 
       {days.length === 0 ? (

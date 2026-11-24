@@ -11,6 +11,7 @@ import { SpaceHeader } from '@/components/SpaceHeader';
 import { Button, Card, Divider, EmptyState, Press, ProgressBar, Screen, Skeleton, s } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { useHousehold } from '@/lib/household';
+import { periodTotals, withMyShare } from '@/lib/personal';
 import { C, catMeta, money, monthRange, R, S, T } from '@/lib/theme';
 import { displayName } from '@/lib/useGroup';
 import { useThemeMode } from '@/lib/themeMode';
@@ -58,6 +59,9 @@ export default function Overview() {
     .sort((a, b) => b[1] - a[1]);
   const scale = Math.max(budget, spent) || 1;
   const latest = data.expenses.slice(0, 5);
+  // The user's own cost (their share of shared expenses + personal ones).
+  const mine = periodTotals(withMyShare(data.expenses, data.splits, me, data.members.map((m) => m.user_id)), now);
+  const vsLast = mine.prevMonthToDate > 0 ? (mine.month - mine.prevMonthToDate) / mine.prevMonthToDate : null;
 
   return (
     <Screen edges={['top']}>
@@ -111,6 +115,29 @@ export default function Overview() {
               </View>
             </Card>
           </Animated.View>
+
+          {/* Your spending: what it cost *you*, not the whole space */}
+          <Card onPress={() => router.push('/insights?view=me')} style={{ gap: S.md }}>
+            <View style={[s.row, { justifyContent: 'space-between' }]}>
+              <Text style={T.label}>Your spending</Text>
+              {vsLast !== null && Math.abs(vsLast) >= 0.01 && (
+                <Text style={[T.caption, { color: vsLast > 0 ? C.negative : C.positive, fontWeight: '700' }]}>
+                  {vsLast > 0 ? '▲' : '▼'} {Math.round(Math.abs(vsLast) * 100)}% vs last month
+                </Text>
+              )}
+            </View>
+            <View style={[s.row, { gap: S.sm }]}>
+              {([['Today', mine.today], ['This week', mine.week], ['This month', mine.month]] as const).map(([label, v]) => (
+                <View key={label} style={{ flex: 1, gap: 2, padding: S.md, borderRadius: R.md, backgroundColor: C.surface2 }}>
+                  <Text style={T.caption}>{label}</Text>
+                  <Text style={{ fontSize: 17, fontWeight: '800', color: C.text, fontVariant: ['tabular-nums'] }} numberOfLines={1} adjustsFontSizeToFit>
+                    {money(v, cur)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+            <Text style={T.caption}>Your share of shared costs plus your personal ones.</Text>
+          </Card>
 
           {/* Category limits that need attention (the overall budget is already shown above) */}
           {alerts.filter((a) => a.key !== '__overall').length > 0 && (

@@ -1,11 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, Share, View } from 'react-native';
 import { Text } from '@/components/Typography';
 import { BackButton, ListRow } from '@/components/Nav';
 import {
-  Avatar, Badge, Button, Card, Divider, EmptyState, Field, IconButton, Loading, Press, Screen, Section, Sheet, s,
+  Avatar, Badge, Button, Card, Chip, Divider, EmptyState, Field, IconButton, Loading, Press, Screen, Section, Sheet, s,
 } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { computeBalances } from '@/lib/balances';
@@ -14,7 +14,7 @@ import { inviteLink } from '@/lib/links';
 import { useFeedback } from '@/lib/feedback';
 import { useHousehold } from '@/lib/household';
 import { Member, supabase } from '@/lib/supabase';
-import { C, money, R, S, T } from '@/lib/theme';
+import { C, CURRENCIES, money, R, S, T } from '@/lib/theme';
 import { displayName, useGroup } from '@/lib/useGroup';
 import { useThemeMode } from '@/lib/themeMode';
 
@@ -25,11 +25,12 @@ export default function SpaceScreen() {
   const router = useRouter();
   const { session } = useAuth();
   const { toast, confirm } = useFeedback();
-  const { activeId, setActive, refreshHouseholds } = useHousehold();
+  const { activeId, setActive, refreshHouseholds, data: active } = useHousehold();
   const me = session?.user.id ?? '';
   const { group, expenses, splits, settlements, members, invites, recurring, catBudgets, categories, loading, missing, reload } = useGroup(id);
   const [invite, setInvite] = useState(false);
   const [rename, setRename] = useState(false);
+  const [currencyOpen, setCurrencyOpen] = useState(false);
 
   const net = useMemo(() => computeBalances(expenses, splits, settlements, members.map((m) => m.user_id)),
     [expenses, splits, settlements, members]);
@@ -166,6 +167,10 @@ export default function SpaceScreen() {
 
         <Section title="Space">
           <Card style={{ padding: 0, overflow: 'hidden' }}>
+            <ListRow icon="cash-outline" tint={C.positive} title="Currency"
+              subtitle={isAdmin ? `${cur} · tap to change` : `${cur} · only the owner or an admin can change it`}
+              onPress={isAdmin ? () => setCurrencyOpen(true) : undefined} />
+            <Divider />
             <ListRow icon="flag-outline" tint={C.warn} title="Budgets"
               subtitle={Number(group.monthly_budget) > 0 ? `${money(Number(group.monthly_budget), cur)} a month${catBudgets.length ? ` · ${catBudgets.length} category limit${catBudgets.length === 1 ? '' : 's'}` : ''}` : 'Set monthly and category limits'}
               onPress={() => open('/budgets')} />
@@ -196,6 +201,8 @@ export default function SpaceScreen() {
 
       <InviteSheet visible={invite} onClose={() => setInvite(false)} groupId={group.id} groupName={group.name}
         code={group.invite_code} me={me} memberEmails={members.map((m) => m.profiles?.email?.toLowerCase() ?? '')} onSent={reload} />
+      <CurrencySheet visible={currencyOpen} onClose={() => setCurrencyOpen(false)} groupId={group.id} current={cur}
+        onSaved={() => { reload(); refreshHouseholds(); if (activeId === group.id) active.reload(); }} />
       <RenameSheet visible={rename} onClose={() => setRename(false)} groupId={group.id} initial={group.name}
         onSaved={() => { reload(); refreshHouseholds(); }} />
     </Screen>
@@ -276,6 +283,40 @@ function RenameSheet({ visible, onClose, groupId, initial, onSaved }: {
   return (
     <Sheet visible={visible} onClose={onClose} title="Rename space" footer={<Button title="Save" loading={busy} onPress={save} />}>
       <Field defaultValue={initial} onChangeText={(t) => { setV(t); setErr(null); }} autoFocus error={err} onSubmitEditing={save} maxLength={40} />
+    </Sheet>
+  );
+}
+
+function CurrencySheet({ visible, onClose, groupId, current, onSaved }: {
+  visible: boolean; onClose: () => void; groupId: string; current: string; onSaved: () => void;
+}) {
+  const { toast } = useFeedback();
+  const [v, setV] = useState(current);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (visible) { setV(current); setErr(null); } }, [visible, current]); // start fresh each time it opens
+  const save = async () => {
+    if (v === current) return onClose();
+    setBusy(true);
+    const { error } = await supabase.from('groups').update({ currency: v }).eq('id', groupId);
+    setBusy(false);
+    if (error) return setErr(error.message);
+    onSaved(); onClose(); toast(`Currency changed to ${v}`, 'success');
+  };
+  return (
+    <Sheet visible={visible} onClose={onClose} title="Currency" footer={<Button title="Save" loading={busy} onPress={save} />}>
+      <View style={{ gap: S.lg }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: S.sm }}>
+          {CURRENCIES.map((c) => <Chip key={c} label={c} active={v === c} onPress={() => { setV(c); setErr(null); }} />)}
+        </View>
+        <View style={[s.row, { gap: S.sm, alignItems: 'flex-start', padding: S.md, borderRadius: R.md, backgroundColor: C.surface2 }]}>
+          <Ionicons name="information-circle-outline" size={18} color={C.sub} />
+          <Text style={[T.caption, { flex: 1 }]}>
+            Amounts are not converted. {money(100, current)} becomes {money(100, v)}. Change it when the space was set up with the wrong currency.
+          </Text>
+        </View>
+        {err && <Text style={{ color: C.negative }}>{err}</Text>}
+      </View>
     </Sheet>
   );
 }

@@ -7,11 +7,10 @@ import { useAuth } from '@/lib/auth';
 import { useFeedback } from '@/lib/feedback';
 import { useHousehold } from '@/lib/household';
 import { supabase } from '@/lib/supabase';
-import { C, money, R, S, T } from '@/lib/theme';
+import { C, money, R, S, T, CURRENCIES } from '@/lib/theme';
 import { useThemeMode } from '@/lib/themeMode';
 
 const EMOJIS = ['💰', '🏠', '✈️', '🍕', '🎉', '👨‍👩‍👧', '🚗', '🎓', '💼', '🛒', '💍', '🐶'];
-const CURRENCIES = ['USD', 'EUR', 'GBP', 'INR', 'JPY', 'AUD', 'CAD'];
 const SUGGESTIONS = ['Home', 'Flatmates', 'Weekend trip', 'Us two'];
 
 export default function NewGroup() {

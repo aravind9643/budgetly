@@ -102,6 +102,9 @@ export const setCustomCategories = (list: { key: string; label: string; emoji: s
 export const allCategories = (): [string, CatMeta][] => [...Object.entries(CATEGORIES).filter(([k]) => k !== 'other'), ...Object.entries(CUSTOM), ['other', CATEGORIES.other]];
 export const catMeta = (k: string): CatMeta => CATEGORIES[k] ?? CUSTOM[k] ?? CATEGORIES.other;
 
+/** Currencies offered when creating a space or changing its currency. */
+export const CURRENCIES = ['USD', 'EUR', 'GBP', 'INR', 'JPY', 'AUD', 'CAD', 'SGD', 'AED', 'CHF', 'CNY', 'NZD', 'ZAR', 'BRL', 'MXN', 'SAR'];
+
 export const money = (n: number, cur = 'USD', compact = false) => {
   try {
     return new Intl.NumberFormat(undefined, {

@@ -16,7 +16,7 @@ import { useThemeMode } from '@/lib/themeMode';
 export default function ActivityTab() {
   useThemeMode(); // re-render this screen when light/dark changes
   const router = useRouter();
-  const { m } = useLocalSearchParams<{ m?: string }>();
+  const { m, d } = useLocalSearchParams<{ m?: string; d?: string }>();
   const { session } = useAuth();
   const { data, openAdd } = useHousehold();
   const me = session?.user.id ?? '';
@@ -51,7 +51,7 @@ export default function ActivityTab() {
       {!g ? <Loading /> : (
         <ScrollView contentContainerStyle={{ paddingHorizontal: S.xl, paddingBottom: 110 }} keyboardShouldPersistTaps="handled">
           <View>
-            <Activity items={items} cur={g.currency} me={me} nameOf={nameOf} rowInfo={rowInfo}
+            <Activity key={d ?? 'all'} day={d} items={items} cur={g.currency} me={me} nameOf={nameOf} rowInfo={rowInfo}
               canEdit={(e) => e.user_id === me} onOpen={(e) => openAdd(e)} />
           </View>
         </ScrollView>
